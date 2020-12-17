@@ -11,16 +11,16 @@
 #>
 
 <#
-	.\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category Any -Required True -HttpOnly
+	.\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category Any -Required $True -HttpOnly
 	.\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category Optimize
 	.\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category OptimizeAllow -IPsOnly
 	.\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category OptimizeAllow -URLsOnly
-	.\Get-O365EndpointsPerCategory.ps1 -Service Exchange -Category Allow -IPversion IPv6 -Required True
+	.\Get-O365EndpointsPerCategory.ps1 -Service Exchange -Category Allow -IPversion IPv6 -Required $True
 	.\Get-O365EndpointsPerCategory.ps1 -Service Any -Category Optimize
 	.\Get-O365EndpointsPerCategory.ps1 -Category Optimize -IPVersion IPv4
 	.\Get-O365EndpointsPerCategory.ps1 -Category OptimizeAllow -URLsOnly
-	.\Get-O365EndpointsPerCategory.ps1 -Service Any -Category Allow -Required True -IPVersion IPv6
-	.\Get-O365EndpointsPerCategory.ps1 -Service Common -Category Allow -Required True -IPversion IPv4
+	.\Get-O365EndpointsPerCategory.ps1 -Service Any -Category Allow -Required $True -IPVersion IPv6
+	.\Get-O365EndpointsPerCategory.ps1 -Service Common -Category Allow -Required $True -IPversion IPv4
 #>
 
 param (
@@ -30,8 +30,7 @@ param (
 	[array]$Category = "Any",
 	[ValidateSet("IPv4","IPv6")]
 	[string]$IPVersion,
-	[ValidateSet("True","False")]
-	[string]$Required,
+	[bool]$Required,
 	[switch]$URLsOnly,
 	[switch]$IPsOnly,
 	[switch]$HttpOnly
@@ -69,6 +68,7 @@ IF ($IPsOnly) {
 	ELSEIF ($IPVersion -eq "IPv6") {$Endpoints = $Endpoints | ? {$_ -like "*:*"}}
 }
 #---------------
+Write-Output ""
 
 IF ($URLsOnly -or $IPsOnly){$Endpoints}
 ELSE {
