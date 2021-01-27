@@ -16,7 +16,7 @@ Get-AzureEndpoints -IPv4 | where Region -like "*ger*" | where Name -like "sql" |
 Get-AzureEndpoints -IPv4 | where Region -like "*ger*"| select Subnets -Unique
 ```
 
-**Below examples with output shown
+**Below examples with output shown**
 ```
 Get-AzureEndpoints -IPv4 | where Region -like "*ger*" | where Name -like "sql" | ft
 
@@ -43,6 +43,7 @@ Sql  GermanyWestCentral germanywc AzureSQL 51.116.249.0/27
 
 ```
 
+
 ```
 Get-AzureEndpoints -IPv4 | where Subnets -like "147.*"
 
@@ -53,6 +54,7 @@ Service :
 Subnets : 147.243.0.0/16
 
 ```
+
 
 ```
 Get-AzureEndpoints -IPv4 | where Region -like "*ger*" | ft
