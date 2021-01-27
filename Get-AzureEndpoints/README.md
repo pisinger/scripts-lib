@@ -14,6 +14,7 @@ Get-AzureEndpoints -IPv4 | where Subnets -like "147.*"
 Get-AzureEndpoints -IPv4 | where Region -like "*ger*" | ft -AutoSize
 Get-AzureEndpoints -IPv4 | where Region -like "*ger*" | where Name -like "sql" | ft
 Get-AzureEndpoints -IPv4 | where Region -like "*ger*"| select Subnets -Unique
+Get-AzureEndpoints -IPv4 | where Name -like *ThreatProtection* | ft
 ```
 
 **Below examples with output shown**

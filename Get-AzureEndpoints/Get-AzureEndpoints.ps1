@@ -17,6 +17,7 @@
 	Get-AzureEndpoints -IPv4 | where Region -like "*ger*" | ft -AutoSize
 	Get-AzureEndpoints -IPv4 | where Region -like "*ger*" | where Name -like "sql" | ft
 	Get-AzureEndpoints -IPv4 | where Region -like "*ger*"| select Subnets -Unique
+	Get-AzureEndpoints -IPv4 | where Name -like *ThreatProtection* | ft
 #>
 
 param (
@@ -27,10 +28,11 @@ param (
 
 $LocalCopy = $($PSScriptRoot + "\AzureEndpoints.csv")
 
+# search in PSScriptRoot Folder + Downloads for Source File
 IF (!$Path) {
-	$Path = (Get-Item "ServiceTags*" | sort LastWriteTime -Descending | select -First 1).Name	
+	$Path = (Get-Item $($PSScriptRoot + "\ServiceTags*") | sort LastWriteTime -Descending | select -First 1).Name	
 	IF ($Path -eq "" ) {
-		$Path = (Get-Item "$env:USERPROFILE\downloads\ServiceTags*" | sort LastWriteTime -Descending | select -First 1).FullName
+		$Path = (Get-Item "$env:USERPROFILE\downloads\ServiceTags*.json" | sort LastWriteTime -Descending | select -First 1).FullName
 	}
 }
 
