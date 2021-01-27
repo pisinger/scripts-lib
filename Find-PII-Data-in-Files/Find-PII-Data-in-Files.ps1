@@ -45,7 +45,7 @@ IF ($Type -eq "IpAddrV6"){ $RX = $RegexIPv6}
 IF ($Type -eq "Password"){ $RX = $RegexPassword}
 IF ($Type -eq "StringToSearch"){ $RX = $RegexStringToSearch}
 	
-$TextFiles = Get-ChildItem $Directory -Include *.txt*,*.csv*,*.rtf*,*.eml*,*.dat*,*.ini*,*.mht*,*.xml*,*.htm*,*.jsp*,*.cfg*,*.conf*,*.php*,*.asp*,*.java*, *.cs*,*.cpp*,*.json*,*.ps1*,*.psm1* -Recurse
+$TextFiles = Get-ChildItem $Directory -Include *.txt,*.csv,*.rtf*,*.eml*,*.dat,*.ini,*.mht*,*.xml*,*.htm*,*.jsp*,*.cfg*,*.conf,*.config,*.php*,*.asp*,*.java*, *.cs*,*.cpp*,*.json*,*.ps1*,*.psm1* -Exclude *lnk -Recurse
 
 # foreach loop adapted from here: 
 # https://stackoverflow.com/questions/39983462/use-powershell-to-quickly-search-files-for-regex-and-output-to-csv
