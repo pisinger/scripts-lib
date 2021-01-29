@@ -4,7 +4,7 @@ This script downloads "AzureServiceTags" json file and parsing it into csv to ge
 
 Note: First run will take some time due to initial parsing.
 
-https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519
+https://www.microsoft.com/en-us/download/details.aspx?id=56519
 
 **Examples**
 ```
