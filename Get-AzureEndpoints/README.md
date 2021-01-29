@@ -1,6 +1,6 @@
 # Get-AzureEndpoints
  
-This script loads previously downloaded "AzureServiceTags" json file and parsing it into csv to get a single subnets per row view. The script always checks for local csv copy and using it for filtering (checking downloads and script execution folder). So simply re-run the script to apply filters you are interested in.
+This script downloads "AzureServiceTags" json file and parsing it into csv to get a single subnets per row view. The script always checks for local csv copy and using it for filtering (checking script execution folder). So simply re-run the script to apply filters you are interested in.
 
 Note: First run will take some time due to initial parsing.
 

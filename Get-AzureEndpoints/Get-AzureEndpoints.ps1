@@ -21,29 +21,26 @@
 #>
 
 param (
-	[string]$Path,
 	[switch]$IPv4,
 	[switch]$IPv6
 )
 
 $LocalCopy = $($PSScriptRoot + "\AzureEndpoints.csv")
 
-# search in PSScriptRoot Folder + Downloads for Source File
-IF (!$Path) {
-	$Path = (Get-Item $($PSScriptRoot + "\ServiceTags*") | sort LastWriteTime -Descending | select -First 1).Name	
-	IF ($Path -eq "" ) {
-		$Path = (Get-Item "$env:USERPROFILE\downloads\ServiceTags*.json" | sort LastWriteTime -Descending | select -First 1).FullName
-	}
-}
-
 # check for recent file
 IF(Test-Path $LocalCopy){
-	IF ((Get-Item $LocalCopy).LastWriteTime -gt (Get-Date).AddDays(-14)){
+	IF ((Get-Item $LocalCopy).LastWriteTime -gt (Get-Date).AddDays(-7)){
 		$Endpoints = Import-Csv $LocalCopy
 	}
 }
-ELSEIF ($Path){
-	$json = Get-Content $Path | ConvertFrom-Json			
+ELSE {
+	# download endpoint file
+	$href = Invoke-WebRequest -Method Get -Uri "https://www.microsoft.com/en-us/download/confirmation.aspx?id=56519"
+	$downloadUri = ($href.links | where href -like "*download.microsoft.com*.json" | select -first 1).href
+	$fileName = $downloadUri | Split-Path -Leaf
+	Invoke-WebRequest -Method Get -Uri $downloadUri -Outfile $($PSScriptRoot + "\" + $fileName)
+	
+	$json = Get-Content $($PSScriptRoot + "\" + $fileName) | ConvertFrom-Json			
 	$results = @()
 
 	$json.values| FOREACH {
@@ -61,10 +58,6 @@ ELSEIF ($Path){
 	}
 	$results | Export-Csv $LocalCopy
 	$Endpoints = Import-Csv $LocalCopy
-}
-ELSE {
-	Write-Warning "Either specify file path or check for a newer version. `nDownload from: https://www.microsoft.com/en-us/download/details.aspx?id=56519"
-	break
 }
 
 IF ($IPv4) {$Endpoints = $Endpoints | where Subnets -notlike "*:*"}
