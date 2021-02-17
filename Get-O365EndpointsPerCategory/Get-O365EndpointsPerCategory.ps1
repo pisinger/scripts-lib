@@ -21,6 +21,7 @@
 	.\Get-O365EndpointsPerCategory.ps1 -Category OptimizeAllow -URLsOnly
 	.\Get-O365EndpointsPerCategory.ps1 -Service Any -Category Allow -Required $True -IPVersion IPv6
 	.\Get-O365EndpointsPerCategory.ps1 -Service Common -Category Allow -Required $True -IPversion IPv4
+	.\Get-O365EndpointsPerCategory.ps1 -SearchURL uservoice.com
 #>
 
 param (
@@ -33,7 +34,8 @@ param (
 	[bool]$Required,
 	[switch]$URLsOnly,
 	[switch]$IPsOnly,
-	[switch]$HttpOnly
+	[switch]$HttpOnly,
+	[string]$SearchURL
 )
 
 # check for recent file
@@ -60,6 +62,7 @@ ELSEIF ($Category -ne "any" -and $Category -ne "OptimizeAllow"){$Endpoints = $En
 ELSE { $Category = "Optimize","Allow","Default"}
 
 IF ($Required){ $Endpoints = $Endpoints | ? {$_.required -like $Required}}
+IF ($SearchURL) { $Endpoints = $Endpoints | where urls -match "$SearchURL"}
 IF ($HttpOnly){ $Endpoints = $Endpoints | ? {$_.tcpports -like "*443*" -or $_.tcpports -like "*80*"}}
 IF ($URLsOnly){ $Endpoints = $Endpoints | where urls -ne $NULL | Select -ExpandProperty urls | Sort -Unique}
 IF ($IPsOnly) {
