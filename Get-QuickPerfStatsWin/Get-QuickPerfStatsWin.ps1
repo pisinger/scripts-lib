@@ -55,7 +55,7 @@ workflow FLOW {
                 $uptime = "$($ts.days):" + $TimeWithoutDays
 				
                 # disk
-                $partitions = Get-PSDrive -Name C,D
+                $partitions = Get-PSDrive -Name C,D -ErrorAction SilentlyContinue
 				
 				# number of cores
 				$ThreadCount = (Get-WmiObject -class Win32_processor).NumberOfLogicalProcessors
