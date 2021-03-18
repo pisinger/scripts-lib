@@ -9,7 +9,7 @@ Feel free to add more specific counters you are interested in.
 Date                     : 18.03.2021 03:05
 Computer                 : AZ-FE1D
 UptimeDays               : 0:00:22
-CpuTotal%                 : 75
+CpuTotal%                : 75
 Cores                    : 2
 CPU1%                    : 75
 CPU2%                    : 75
@@ -46,7 +46,7 @@ AsMcuSkypeUsers          : 0
 Date                     : 18.03.2021 03:05
 Computer                 : AZ-FE1C
 UptimeDays               : 0:00:22
-CpuTotal%                 : 98
+CpuTotal%                : 98
 Cores                    : 2
 CPU1%                    : 98
 CPU2%                    : 99
