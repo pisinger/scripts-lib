@@ -32,9 +32,8 @@ workflow FLOW {
                     "\LS:AsMcu - AsMcu Conferences\ASMCU - Connected Users"
                 )
             
-                $results = get-counter -counter $using:counters | select -expand countersamples | select cookedvalue
-            
-                $ProcHighMem = (Get-Counter "\Process(*)\Working Set - Private" -ErrorAction SilentlyContinue).CounterSamples | where InstanceName -notmatch '_total|memory compression|idle|system' | select InstanceName, CookedValue | sort CookedValue -Descending | select -First 1
+                $results = get-counter -counter $using:counters -ErrorAction SilentlyContinue | select -expand countersamples | select cookedvalue
+				
                 $ProcHighCpuTime = (Get-Counter "\Process(*)\% Processor Time" -ErrorAction SilentlyContinue).CounterSamples | where InstanceName -notmatch '_total|memory compression|idle|system' | select InstanceName, CookedValue | sort CookedValue -Descending | select -First 1
                 $ProcHighRead = (Get-Counter "\Process(*)\IO Read Bytes/sec" -ErrorAction SilentlyContinue).CounterSamples | where InstanceName -notmatch '_total|memory compression|idle|system' | select InstanceName, CookedValue | sort CookedValue -Descending | select -First 1
                 $ProcHighWrite = (Get-Counter "\Process(*)\IO Write Bytes/sec" -ErrorAction SilentlyContinue).CounterSamples | where InstanceName -notmatch '_total|memory compression|idle|system' | select InstanceName, CookedValue | sort CookedValue -Descending | select -First 1
@@ -52,7 +51,7 @@ workflow FLOW {
                 $min = ((get-date) - (gcim Win32_OperatingSystem).LastBootUpTime).totalMinutes;
                 $ts = [timespan]::fromminutes($min)
                 $TimeWithoutDays = $ts.tostring("hh\:mm")
-                $uptime = "$($ts.days):" + $TimeWithoutDays
+                $uptime = "$($ts.days)d:" + $TimeWithoutDays
 				
                 # disk
                 $partitions = Get-PSDrive -Name C,D -ErrorAction SilentlyContinue
@@ -62,6 +61,11 @@ workflow FLOW {
 				
 				# memory
 				$memory = (Get-WmiObject win32_operatingsystem) | select TotalVirtualMemorySize, TotalVisibleMemorySize
+				$MemoryFree = [math]::Round(($results[5].CookedValue)/1kb,3)
+				
+				$Processes = Get-Process | Group-Object -Property ProcessName
+				$ProcHighMem = @()
+				FOREACH ($Process in $Processes){$ProcHighMem += [PSCustomObject]@{ProcessName = $Process.Name; Memory = ($Process.Group | Measure-Object WorkingSet -Sum).Sum}}
 				
 				$object = [PSCustomObject]@{
                     Date        = "{0:dd.MM.yyyy HH:mm}" -f (Get-date)
@@ -75,14 +79,15 @@ workflow FLOW {
                     'CPU2%'     = [math]::Round($results[2].CookedValue)
                     'CPU3%'     = [math]::Round($results[3].CookedValue)
                     'CPU4%'     = [math]::Round($results[4].CookedValue)
-					MemoryFreeMB        = [math]::Round($results[5].CookedValue)
-					MemoryPagedMB 		= [math]::Round(($memory.TotalVirtualMemorySize - $memory.TotalVisibleMemorySize)/1kb,3)
+					MemoryFreeGB        = $MemoryFree 
+					MemoryPagedGB 		= [math]::Round(($memory.TotalVirtualMemorySize - $memory.TotalVisibleMemorySize)/1mb,3)
+					'MemoryUsed%'		= [math]::Round((($memory.TotalVisibleMemorySize) - $MemoryFree*1mb) / $memory.TotalVisibleMemorySize * 100)					
 					ServicesRunning		= (Get-Service | where Status -eq "running").count
-					NumberOfProcesses	= (Get-Process).count
+					NumberOfProcesses	= (Get-Process).count					
                     ProcHighCpuTime     = $ProcHighCpuTime.InstanceName
-                    'ProcHighCpuTime%'  = [math]::Round(($ProcHighCpuTime.CookedValue)/$cpu.NumberOfLogicalProcessors)                    
-                    ProcHighMem         = $ProcHighMem.InstanceName
-                    ProcHighMemGB       = [math]::Round($ProcHighMem.CookedValue/1gb,3)                 
+                    'ProcHighCpuTime%'  = [math]::Round(($ProcHighCpuTime.CookedValue)/$cpu.NumberOfLogicalProcessors)					
+					ProcHighMem         = ($ProcHighMem | sort -Descending Memory | select -First 1).ProcessName
+					ProcHighMemGB       = [math]::Round(($ProcHighMem | sort -Descending Memory | select -First 1).Memory/1gb,3)					
                     ProcHighRead        = $ProcHighRead.InstanceName
                     ProcHighReadMB      = [math]::Round($ProcHighRead.CookedValue/1mb,3)
                     ProcHighWrite       = $ProcHighWrite.InstanceName

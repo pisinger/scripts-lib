@@ -6,9 +6,9 @@ Feel free to add more specific counters you are interested in.
 
 **Examples**
 ```
-Date                     : 18.03.2021 03:05
+Date                     : 19.03.2021 19:34
 Computer                 : AZ-FE1D
-UptimeDays               : 0:00:22
+UptimeDays               : 0d:00:25
 CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
 MaxClock                 : 2295
 Cores                    : 2
@@ -17,72 +17,75 @@ CPU1%                    : 75
 CPU2%                    : 75
 CPU3%                    : 0
 CPU4%                    : 0
-MemoryFreeMB             : 3437
-MemoryPagedMB            : 1280
-ServicesRunning          : 96
-NumberOfProcesses        : 112
-ProcHighCpuTime          : tiworker
-ProcHighCpuTime%         : 47
-ProcHighMem              : tiworker
-ProcHighMemGB            : 0.394
-ProcHighRead             : msmpeng
-ProcHighReadMB           : 36.671
-ProcHighWrite            : msmpeng
-ProcHighWriteMB          : 0.57
-ProcMostThreads          : sqlservr
-ProcMostThreadsCount     : 71
-DiskFreeC                : 76
+MemoryFreeGB             : 4.43
+MemoryPagedGB            : 1.25
+MemoryUsed%              : 45
+ServicesRunning          : 102
+NumberOfProcesses        : 136
+ProcHighCpuTime          : fabric
+ProcHighCpuTime%         : 3
+ProcHighMem              : w3wp
+ProcHighMemGB            : 0.652
+ProcHighRead             : sqlservr
+ProcHighReadMB           : 0.013
+ProcHighWrite            : w3wp
+ProcHighWriteMB          : 0.005
+ProcMostThreads          : rtcsrv
+ProcMostThreadsCount     : 131
+DiskFreeC                : 73
 DiskFreeD                : 15
-EventsWarn               : 8
-EventsError              : 12
+EventsWarn               : 26
+EventsError              : 29
 EventsCrit               : 0
-EventsWarnSkype          : 7
-EventsErrorSkype         : 36
+EventsWarnSkype          : 92
+EventsErrorSkype         : 139
 EventsCritSkype          : 0
-EventsWarnSkypeLastHour  : 7
-EventsErrorSkypeLastHour : 36
+EventsWarnSkypeLastHour  : 20
+EventsErrorSkypeLastHour : 10
 EventsCritSkypeLastHour  : 0
 ActiveSkypeUsers         : 0
 AvMcuSkypeUsers          : 0
 AsMcuSkypeUsers          : 0
 
-Date                     : 18.03.2021 03:05
-Computer                 : AZ-FE1C
-UptimeDays               : 0:00:22
+Date                     : 19.03.2021 19:34
+Computer                 : AZ-AG04
+UptimeDays               : 0d:03:47
 CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
 MaxClock                 : 2295
 Cores                    : 2
-CpuTotal%                : 98
-CPU1%                    : 98
-CPU2%                    : 99
+CpuTotal%                : 14
+CPU1%                    : 16
+CPU2%                    : 12
 CPU3%                    : 0
 CPU4%                    : 0
-MemoryFreeMB             : 2195
-MemoryPagedMB            : 1280
-ServicesRunning          : 103
-NumberOfProcesses        : 133
-ProcHighCpuTime          : mrt
-ProcHighCpuTime%         : 47
+MemoryFreeGB             : 0.868
+MemoryPagedGB            : 0.688
+MemoryUsed%              : 78
+ServicesRunning          : 75
+NumberOfProcesses        : 95
+ProcHighCpuTime          : powershell
+ProcHighCpuTime%         : 5
 ProcHighMem              : sqlservr
-ProcHighMemGB            : 0.339
-ProcHighRead             : mrt
-ProcHighReadMB           : 6.702
-ProcHighWrite            : tiworker
-ProcHighWriteMB          : 0.934
-ProcMostThreads          : rtcsrv
-ProcMostThreadsCount     : 112
-DiskFreeC                : 74
-DiskFreeD                : 15
-EventsWarn               : 9
-EventsError              : 5
+ProcHighMemGB            : 1.841
+ProcHighRead             : microsoftdependencyagent
+ProcHighReadMB           : 0.002
+ProcHighWrite            : sqlceip
+ProcHighWriteMB          : 0
+ProcMostThreads          : sqlservr
+ProcMostThreadsCount     : 69
+DiskFreeC                : 189
+DiskFreeD                : 7
+EventsWarn               : 16
+EventsError              : 79
 EventsCrit               : 0
-EventsWarnSkype          : 23
-EventsErrorSkype         : 19
+EventsWarnSkype          : 0
+EventsErrorSkype         : 0
 EventsCritSkype          : 0
-EventsWarnSkypeLastHour  : 23
-EventsErrorSkypeLastHour : 19
+EventsWarnSkypeLastHour  : 0
+EventsErrorSkypeLastHour : 0
 EventsCritSkypeLastHour  : 0
-ActiveSkypeUsers         : 1
-AvMcuSkypeUsers          : 0
-AsMcuSkypeUsers          : 0
+ActiveSkypeUsers         : 
+AvMcuSkypeUsers          : 
+AsMcuSkypeUsers          : 
+
 ```
