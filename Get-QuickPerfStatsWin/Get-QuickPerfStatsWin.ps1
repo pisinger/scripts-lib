@@ -57,24 +57,30 @@ workflow FLOW {
                 # disk
                 $partitions = Get-PSDrive -Name C,D -ErrorAction SilentlyContinue
 				
-				# number of cores
-				$ThreadCount = (Get-WmiObject -class Win32_processor).NumberOfLogicalProcessors
+				# cpu
+				$cpu = Get-WmiObject -class Win32_processor | select Name, NumberOfLogicalProcessors, MaxClockSpeed
+				
+				# memory
+				$memory = (Get-WmiObject win32_operatingsystem) | select TotalVirtualMemorySize, TotalVisibleMemorySize
 				
 				$object = [PSCustomObject]@{
-                    Date        = "{0:dd.MM.yyyy hh:mm}" -f (Get-date)
+                    Date        = "{0:dd.MM.yyyy HH:mm}" -f (Get-date)
                     Computer    = hostname
                     UptimeDays  = $uptime
-                    'CpuTotal%' = [math]::Round($results[0].CookedValue)
-					Cores		= $ThreadCount
+					CoreName	= $cpu.Name
+					MaxClock	= $cpu.MaxClockSpeed
+					Cores		= $cpu.NumberOfLogicalProcessors			
+					'CpuTotal%' = [math]::Round($results[0].CookedValue)
                     'CPU1%'     = [math]::Round($results[1].CookedValue)
                     'CPU2%'     = [math]::Round($results[2].CookedValue)
                     'CPU3%'     = [math]::Round($results[3].CookedValue)
                     'CPU4%'     = [math]::Round($results[4].CookedValue)
-					MemoryFreeGB        = [math]::Round($results[5].CookedValue,3)
+					MemoryFreeMB        = [math]::Round($results[5].CookedValue)
+					MemoryPagedMB 		= [math]::Round(($memory.TotalVirtualMemorySize - $memory.TotalVisibleMemorySize)/1kb,3)
 					ServicesRunning		= (Get-Service | where Status -eq "running").count
 					NumberOfProcesses	= (Get-Process).count
                     ProcHighCpuTime     = $ProcHighCpuTime.InstanceName
-                    'ProcHighCpuTime%'  = [math]::Round(($ProcHighCpuTime.CookedValue)/$ThreadCount)                    
+                    'ProcHighCpuTime%'  = [math]::Round(($ProcHighCpuTime.CookedValue)/$cpu.NumberOfLogicalProcessors)                    
                     ProcHighMem         = $ProcHighMem.InstanceName
                     ProcHighMemGB       = [math]::Round($ProcHighMem.CookedValue/1gb,3)                 
                     ProcHighRead        = $ProcHighRead.InstanceName

@@ -9,13 +9,16 @@ Feel free to add more specific counters you are interested in.
 Date                     : 18.03.2021 03:05
 Computer                 : AZ-FE1D
 UptimeDays               : 0:00:22
-CpuTotal%                : 75
+CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
+MaxClock                 : 2295
 Cores                    : 2
+CpuTotal%                : 75
 CPU1%                    : 75
 CPU2%                    : 75
 CPU3%                    : 0
 CPU4%                    : 0
-MemoryFreeGB             : 3437
+MemoryFreeMB             : 3437
+MemoryPagedMB            : 1280
 ServicesRunning          : 96
 NumberOfProcesses        : 112
 ProcHighCpuTime          : tiworker
@@ -46,13 +49,16 @@ AsMcuSkypeUsers          : 0
 Date                     : 18.03.2021 03:05
 Computer                 : AZ-FE1C
 UptimeDays               : 0:00:22
-CpuTotal%                : 98
+CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
+MaxClock                 : 2295
 Cores                    : 2
+CpuTotal%                : 98
 CPU1%                    : 98
 CPU2%                    : 99
 CPU3%                    : 0
 CPU4%                    : 0
-MemoryFreeGB             : 2195
+MemoryFreeMB             : 2195
+MemoryPagedMB            : 1280
 ServicesRunning          : 103
 NumberOfProcesses        : 133
 ProcHighCpuTime          : mrt
