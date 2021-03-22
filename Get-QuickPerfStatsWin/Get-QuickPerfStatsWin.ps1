@@ -39,22 +39,19 @@ workflow FLOW {
                 $ProcHighWrite = (Get-Counter "\Process(*)\IO Write Bytes/sec" -ErrorAction SilentlyContinue).CounterSamples | where InstanceName -notmatch '_total|memory compression|idle|system' | select InstanceName, CookedValue | sort CookedValue -Descending | select -First 1
                 $ProcMostThreads = (Get-Counter "\Process(*)\Thread Count" -ErrorAction SilentlyContinue).CounterSamples | where InstanceName -notmatch '_total|memory compression|idle|system' | select InstanceName, CookedValue | sort CookedValue -Descending | select -First 1
                 
+				# os
+				$os = get-wmiobject Win32_OperatingSystem
+				
                 # events
 				$today = (Get-Date -Hour 0 -Minute 00 -Second 00)
-				$LastHour = (Get-Date).AddHours(-1)					
-				$events = Get-WinEvent -FilterHashtable @{LogName = "System","Application","setup"; StartTime = $today; Level = 1,2,3}			
+				$LastHour = (Get-Date).AddHours(-1)			
+				$events = Get-WinEvent -FilterHashtable @{LogName = "System","Application","setup"; StartTime = $today; Level = 1,2,3}
+				$eventsLastHour = $events | where TimeCreated -gt $LastHour
                 $eventsSkype = Get-WinEvent -FilterHashtable @{LogName = "Lync Server"; StartTime = $today; Level = 1,2,3}
-                $eventsSkype = $eventsSkype | where Id -notlike "20033" | where Id -notlike "32054" | where Id -notlike "32263"
 				$eventsSkypeLastHour = $eventsSkype | where TimeCreated -gt $LastHour
 				
-                # time
-                $min = ((get-date) - (gcim Win32_OperatingSystem).LastBootUpTime).totalMinutes;
-                $ts = [timespan]::fromminutes($min)
-                $TimeWithoutDays = $ts.tostring("hh\:mm")
-                $uptime = "$($ts.days)d:" + $TimeWithoutDays
-				
                 # disk
-                $partitions = Get-PSDrive -Name C,D -ErrorAction SilentlyContinue
+                $partitions = Get-PSDrive -Name C,D,E -ErrorAction SilentlyContinue
 				
 				# cpu
 				$cpu = Get-WmiObject -class Win32_processor | select Name, NumberOfLogicalProcessors, MaxClockSpeed
@@ -68,9 +65,11 @@ workflow FLOW {
 				FOREACH ($Process in $Processes){$ProcHighMem += [PSCustomObject]@{ProcessName = $Process.Name; Memory = ($Process.Group | Measure-Object WorkingSet -Sum).Sum}}
 				
 				$object = [PSCustomObject]@{
-                    Date        = "{0:dd.MM.yyyy HH:mm}" -f (Get-date)
-                    Computer    = hostname
-                    UptimeDays  = $uptime
+                    Date        = Get-date
+                    Computer    = $env:COMPUTERNAME					
+                    BootTime	= $os.ConvertToDateTime($os.LastBootUpTime) 
+					OS			= $os.Caption
+					Model		= $((get-wmiobject Win32_ComputerSystem).Model)
 					CoreName	= $cpu.Name
 					MaxClock	= $cpu.MaxClockSpeed
 					Cores		= $cpu.NumberOfLogicalProcessors			
@@ -95,7 +94,8 @@ workflow FLOW {
                     ProcMostThreads     = $ProcMostThreads.InstanceName
                     ProcMostThreadsCount = $ProcMostThreads.CookedValue
                     DiskFreeC   = [math]::Round($partitions[0].Free/1gb)
-                    DiskFreeD   = [math]::Round($partitions[1].Free/1gb)                
+                    DiskFreeD   = [math]::Round($partitions[1].Free/1gb)
+					DiskFreeE   = [math]::Round($partitions[2].Free/1gb)
                     EventsWarn          = ($events | where Level -eq 3).Count
                     EventsError         = ($events | where Level -eq 2).Count
                     EventsCrit          = ($events | where Level -eq 1).Count
