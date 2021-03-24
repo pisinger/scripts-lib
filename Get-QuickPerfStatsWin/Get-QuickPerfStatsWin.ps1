@@ -55,6 +55,8 @@ workflow FLOW {
 				
 				# cpu
 				$cpu = Get-WmiObject -class Win32_processor | select Name, NumberOfLogicalProcessors, MaxClockSpeed
+				$cores = 0
+				$cpu | foreach {$cores += $_.NumberOfLogicalProcessors}
 				
 				# memory
 				$memory = (Get-WmiObject win32_operatingsystem) | select TotalVirtualMemorySize, TotalVisibleMemorySize
@@ -70,7 +72,7 @@ workflow FLOW {
                     BootTime	= $os.ConvertToDateTime($os.LastBootUpTime) 
 					OS			= $os.Caption
 					Model		= $((get-wmiobject Win32_ComputerSystem).Model)
-					CoreName	= $cpu.Name
+					CoreName	= $cpu.Name | select -first 1
 					MaxClock	= $cpu.MaxClockSpeed
 					Cores		= $cpu.NumberOfLogicalProcessors			
 					'CpuTotal%' = [math]::Round($results[0].CookedValue)
@@ -80,11 +82,11 @@ workflow FLOW {
                     'CPU4%'     = [math]::Round($results[4].CookedValue)
 					MemoryFreeGB        = $MemoryFree 
 					MemoryPagedGB 		= [math]::Round(($memory.TotalVirtualMemorySize - $memory.TotalVisibleMemorySize)/1mb,3)
-					'MemoryUsed%'		= [math]::Round((($memory.TotalVisibleMemorySize) - $MemoryFree*1mb) / $memory.TotalVisibleMemorySize * 100)					
+					'MemoryUsed%'		= [math]::Round((($memory.TotalVisibleMemorySize) - $MemoryFree*1mb) / $memory.TotalVisibleMemorySize * 100)				
 					ServicesRunning		= (Get-Service | where Status -eq "running").count
-					NumberOfProcesses	= (Get-Process).count					
+					NumberOfProcesses	= (Get-Process).count
                     ProcHighCpuTime     = $ProcHighCpuTime.InstanceName
-                    'ProcHighCpuTime%'  = [math]::Round(($ProcHighCpuTime.CookedValue)/$cpu.NumberOfLogicalProcessors)					
+                    'ProcHighCpuTime%'  = [math]::Round(($ProcHighCpuTime.CookedValue)/$cores,2)
 					ProcHighMem         = ($ProcHighMem | sort -Descending Memory | select -First 1).ProcessName
 					ProcHighMemGB       = [math]::Round(($ProcHighMem | sort -Descending Memory | select -First 1).Memory/1gb,3)					
                     ProcHighRead        = $ProcHighRead.InstanceName

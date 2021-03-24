@@ -6,9 +6,11 @@ Feel free to add more specific counters you are interested in.
 
 **Examples**
 ```
-Date                     : 19.03.2021 19:34
+Date                     : 3/24/2021 1:50:51 PM
 Computer                 : AZ-FE1D
-UptimeDays               : 0d:00:25
+BootTime                 : 3/24/2021 1:37:01 PM
+OS                       : Microsoft Windows Server 2016 Datacenter
+Model                    : Virtual Machine
 CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
 MaxClock                 : 2295
 Cores                    : 2
@@ -47,9 +49,11 @@ ActiveSkypeUsers         : 0
 AvMcuSkypeUsers          : 0
 AsMcuSkypeUsers          : 0
 
-Date                     : 19.03.2021 19:34
+Date                     : 3/24/2021 1:50:23 PM
 Computer                 : AZ-AG04
-UptimeDays               : 0d:03:47
+BootTime                 : 3/24/2021 1:35:51 PM
+OS                       : Microsoft Windows Server 2016 Datacenter
+Model                    : Virtual Machine
 CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
 MaxClock                 : 2295
 Cores                    : 2
