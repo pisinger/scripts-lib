@@ -46,6 +46,10 @@ workflow FLOW {
 				$today = (Get-Date -Hour 0 -Minute 00 -Second 00)
 				$LastHour = (Get-Date).AddHours(-1)			
 				$events = Get-WinEvent -FilterHashtable @{LogName = "System","Application","setup"; StartTime = $today; Level = 1,2,3}
+				
+				$eventMostProvider = (($events | group-object ProviderName | sort Count -Descending) | select -First 1)
+				$eventMostId = (($events | group-object Id | sort Count -Descending) | select -First 1).Name				
+				
 				$eventsLastHour = $events | where TimeCreated -gt $LastHour
                 $eventsSkype = Get-WinEvent -FilterHashtable @{LogName = "Lync Server"; StartTime = $today; Level = 1,2,3}
 				$eventsSkypeLastHour = $eventsSkype | where TimeCreated -gt $LastHour
@@ -100,7 +104,10 @@ workflow FLOW {
 					DiskFreeE   = [math]::Round($partitions[2].Free/1gb)
                     EventsWarn          = ($events | where Level -eq 3).Count
                     EventsError         = ($events | where Level -eq 2).Count
-                    EventsCrit          = ($events | where Level -eq 1).Count
+                    EventsCrit          = ($events | where Level -eq 1).Count					
+					EventMostProvider   = $eventMostProvider.Name
+					EventMostId         = $eventMostId
+					EventMostCount  	= $eventMostProvider.Count					
                     EventsWarnSkype     = ($eventsSkype | where Level -eq 3).Count
                     EventsErrorSkype    = ($eventsSkype | where Level -eq 2).Count
                     EventsCritSkype     = ($eventsSkype | where Level -eq 1).Count
