@@ -46,12 +46,12 @@ workflow FLOW {
 				$LastHour = (Get-Date).AddHours(-1)			
 				$events = Get-WinEvent -FilterHashtable @{LogName = "System","Application","setup"; StartTime = $today; Level = 1,2,3}
 				$eventsLastHour = $events | where TimeCreated -gt $LastHour				
-				$eventMostProvider = (($events | group-object ProviderName | sort Count -Descending) | select -First 1)
-				$eventMostId = (($events | group-object Id | sort Count -Descending) | select -First 1).Name			
+				$EventTopProvider = (($events | group-object ProviderName | sort Count -Descending) | select -First 1)
+				$EventTopId = (($events | group-object Id | sort Count -Descending) | select -First 1).Name			
 				
                 $eventsSkype = Get-WinEvent -ErrorAction SilentlyContinue -FilterHashtable @{LogName = "Lync Server"; StartTime = $today; Level = 1,2,3}
-				$eventMostSkype = (($eventsSkype | group-object ProviderName | sort Count -Descending) | select -First 1)
-				$eventMostSkypeId = (($eventsSkype | group-object Id | sort Count -Descending) | select -First 1).Name
+				$EventTopSkype = (($eventsSkype | group-object ProviderName | sort Count -Descending) | select -First 1)
+				$EventTopSkypeId = (($eventsSkype | group-object Id | sort Count -Descending) | select -First 1).Name
 				$eventsSkypeLastHour = $eventsSkype | where TimeCreated -gt $LastHour
 				
                 # disk
@@ -103,15 +103,15 @@ workflow FLOW {
 					EventsCrit          = ($events | where Level -eq 1).Count
                     EventsError         = ($events | where Level -eq 2).Count                    
 					EventsWarn          = ($events | where Level -eq 3).Count					
-					EventMostProvider   = $eventMostProvider.Name
-					EventMostId         = $eventMostId
-					EventMostCount  	= $eventMostProvider.Count
+					EventTopProvider   	= $EventTopProvider.Name
+					EventTopId         	= $EventTopId
+					EventTopCount  		= $EventTopProvider.Count
 					EventsCritSkype     = ($eventsSkype | where Level -eq 1).Count
 					EventsErrorSkype    = ($eventsSkype | where Level -eq 2).Count				
                     EventsWarnSkype     = ($eventsSkype | where Level -eq 3).Count
-					EventMostSkype		= $eventMostSkype.Name
-					EventMostSkypeId	= $eventMostSkypeId
-					EventMostSkypeCount = $eventMostSkype.Count
+					EventTopSkype		= $EventTopSkype.Name
+					EventTopSkypeId		= $EventTopSkypeId
+					EventTopSkypeCount 	= $EventTopSkype.Count
 					EventsCritSkypeLastHour     = ($eventsSkypeLastHour | where Level -eq 1).Count
 					EventsErrorSkypeLastHour    = ($eventsSkypeLastHour | where Level -eq 2).Count
                     EventsWarnSkypeLastHour     = ($eventsSkypeLastHour | where Level -eq 3).Count                   
