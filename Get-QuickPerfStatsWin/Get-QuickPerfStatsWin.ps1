@@ -21,18 +21,17 @@ workflow FLOW {
             
             Invoke-Command -ComputerName $using:Computer -ScriptBlock {
                 $Counters = @(
-                    "\Processor Information(_total)\% Processor Utility",
-                    "\Processor Information(0,0)\% Processor Utility",
-                    "\Processor Information(0,1)\% Processor Utility",
-                    "\Processor Information(0,2)\% Processor Utility",
-                    "\Processor Information(0,3)\% Processor Utility", 
                     "\Memory\Available MBytes"
                     "\LS:USrv - Endpoint Cache\USrv - Active Registered Users",
                     "\LS:AVMCU - Operations\AVMCU - Number of Users",
                     "\LS:AsMcu - AsMcu Conferences\ASMCU - Connected Users"
                 )
-            
-                $results = get-counter -counter $using:counters -ErrorAction SilentlyContinue | select -expand countersamples | select cookedvalue
+				
+				$results = get-counter -counter $using:counters -ErrorAction SilentlyContinue | select -expand countersamples | select cookedvalue
+                $resultsCPU = get-counter -counter "\Processor(*)\% Processor Time" -ErrorAction SilentlyContinue | select -expand countersamples | select cookedvalue
+				
+                $cputimes = @()
+                $resultsCPU | foreach {$cputimes += [math]::round($_.cookedvalue)}			
 				
                 $ProcHighCpuTime = (Get-Counter "\Process(*)\% Processor Time" -ErrorAction SilentlyContinue).CounterSamples | where InstanceName -notmatch '_total|memory compression|idle|system' | select InstanceName, CookedValue | sort CookedValue -Descending | select -First 1
                 $ProcHighRead = (Get-Counter "\Process(*)\IO Read Bytes/sec" -ErrorAction SilentlyContinue).CounterSamples | where InstanceName -notmatch '_total|memory compression|idle|system' | select InstanceName, CookedValue | sort CookedValue -Descending | select -First 1
@@ -46,12 +45,13 @@ workflow FLOW {
 				$today = (Get-Date -Hour 0 -Minute 00 -Second 00)
 				$LastHour = (Get-Date).AddHours(-1)			
 				$events = Get-WinEvent -FilterHashtable @{LogName = "System","Application","setup"; StartTime = $today; Level = 1,2,3}
-				
+				$eventsLastHour = $events | where TimeCreated -gt $LastHour				
 				$eventMostProvider = (($events | group-object ProviderName | sort Count -Descending) | select -First 1)
-				$eventMostId = (($events | group-object Id | sort Count -Descending) | select -First 1).Name				
+				$eventMostId = (($events | group-object Id | sort Count -Descending) | select -First 1).Name			
 				
-				$eventsLastHour = $events | where TimeCreated -gt $LastHour
-                $eventsSkype = Get-WinEvent -FilterHashtable @{LogName = "Lync Server"; StartTime = $today; Level = 1,2,3}
+                $eventsSkype = Get-WinEvent -ErrorAction SilentlyContinue -FilterHashtable @{LogName = "Lync Server"; StartTime = $today; Level = 1,2,3}
+				$eventMostSkype = (($eventsSkype | group-object ProviderName | sort Count -Descending) | select -First 1)
+				$eventMostSkypeId = (($eventsSkype | group-object Id | sort Count -Descending) | select -First 1).Name
 				$eventsSkypeLastHour = $eventsSkype | where TimeCreated -gt $LastHour
 				
                 # disk
@@ -64,7 +64,7 @@ workflow FLOW {
 				
 				# memory
 				$memory = (Get-WmiObject win32_operatingsystem) | select TotalVirtualMemorySize, TotalVisibleMemorySize
-				$MemoryFree = [math]::Round(($results[5].CookedValue)/1kb,3)
+				$MemoryFree = [math]::Round(($results[0].CookedValue)/1kb,3)
 				
 				$Processes = Get-Process | Group-Object -Property ProcessName
 				$ProcHighMem = @()
@@ -79,16 +79,13 @@ workflow FLOW {
 					CoreName	= $cpu.Name | select -first 1
 					MaxClock	= $cpu.MaxClockSpeed
 					Cores		= $cpu.NumberOfLogicalProcessors			
-					'CpuTotal%' = [math]::Round($results[0].CookedValue)
-                    'CPU1%'     = [math]::Round($results[1].CookedValue)
-                    'CPU2%'     = [math]::Round($results[2].CookedValue)
-                    'CPU3%'     = [math]::Round($results[3].CookedValue)
-                    'CPU4%'     = [math]::Round($results[4].CookedValue)
+					'CpuTotal%' = $cputimes[-1]
+                    'CpuPerCore%'     	= $cputimes[0..$($cputimes.Length - 2)]
 					MemoryFreeGB        = $MemoryFree 
 					MemoryPagedGB 		= [math]::Round(($memory.TotalVirtualMemorySize - $memory.TotalVisibleMemorySize)/1mb,3)
 					'MemoryUsed%'		= [math]::Round((($memory.TotalVisibleMemorySize) - $MemoryFree*1mb) / $memory.TotalVisibleMemorySize * 100)				
 					ServicesRunning		= (Get-Service | where Status -eq "running").count
-					NumberOfProcesses	= (Get-Process).count
+					ProcessesRunning	= (Get-Process).count
                     ProcHighCpuTime     = $ProcHighCpuTime.InstanceName
                     'ProcHighCpuTime%'  = [math]::Round(($ProcHighCpuTime.CookedValue)/$cores,2)
 					ProcHighMem         = ($ProcHighMem | sort -Descending Memory | select -First 1).ProcessName
@@ -102,21 +99,25 @@ workflow FLOW {
                     DiskFreeC   = [math]::Round($partitions[0].Free/1gb)
                     DiskFreeD   = [math]::Round($partitions[1].Free/1gb)
 					DiskFreeE   = [math]::Round($partitions[2].Free/1gb)
-                    EventsWarn          = ($events | where Level -eq 3).Count
-                    EventsError         = ($events | where Level -eq 2).Count
-                    EventsCrit          = ($events | where Level -eq 1).Count					
+					EventsLastHour		= $eventsLastHour.count
+					EventsCrit          = ($events | where Level -eq 1).Count
+                    EventsError         = ($events | where Level -eq 2).Count                    
+					EventsWarn          = ($events | where Level -eq 3).Count					
 					EventMostProvider   = $eventMostProvider.Name
 					EventMostId         = $eventMostId
-					EventMostCount  	= $eventMostProvider.Count					
+					EventMostCount  	= $eventMostProvider.Count
+					EventsCritSkype     = ($eventsSkype | where Level -eq 1).Count
+					EventsErrorSkype    = ($eventsSkype | where Level -eq 2).Count				
                     EventsWarnSkype     = ($eventsSkype | where Level -eq 3).Count
-                    EventsErrorSkype    = ($eventsSkype | where Level -eq 2).Count
-                    EventsCritSkype     = ($eventsSkype | where Level -eq 1).Count
-                    EventsWarnSkypeLastHour     = ($eventsSkypeLastHour | where Level -eq 3).Count
-                    EventsErrorSkypeLastHour    = ($eventsSkypeLastHour | where Level -eq 2).Count
-                    EventsCritSkypeLastHour     = ($eventsSkypeLastHour | where Level -eq 1).Count
-                    ActiveSkypeUsers    = $results[6].CookedValue   
-                    AvMcuSkypeUsers     = $results[7].CookedValue
-                    AsMcuSkypeUsers     = $results[8].CookedValue
+					EventMostSkype		= $eventMostSkype.Name
+					EventMostSkypeId	= $eventMostSkypeId
+					EventMostSkypeCount = $eventMostSkype.Count
+					EventsCritSkypeLastHour     = ($eventsSkypeLastHour | where Level -eq 1).Count
+					EventsErrorSkypeLastHour    = ($eventsSkypeLastHour | where Level -eq 2).Count
+                    EventsWarnSkypeLastHour     = ($eventsSkypeLastHour | where Level -eq 3).Count                   
+                    ActiveSkypeUsers    = $results[1].CookedValue   
+                    AvMcuSkypeUsers     = $results[2].CookedValue
+                    AsMcuSkypeUsers     = $results[3].CookedValue
                 }
                 
                 return $object

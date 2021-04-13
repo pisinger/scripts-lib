@@ -6,90 +6,99 @@ Feel free to add more specific counters you are interested in.
 
 **Examples**
 ```
-Date                     : 3/24/2021 1:50:51 PM
-Computer                 : AZ-FE1D
-BootTime                 : 3/24/2021 1:37:01 PM
-OS                       : Microsoft Windows Server 2016 Datacenter
-Model                    : Virtual Machine
-CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
-MaxClock                 : 2295
-Cores                    : 2
-CpuTotal%                : 75
-CPU1%                    : 75
-CPU2%                    : 75
-CPU3%                    : 0
-CPU4%                    : 0
-MemoryFreeGB             : 4.43
-MemoryPagedGB            : 1.25
-MemoryUsed%              : 45
-ServicesRunning          : 102
-NumberOfProcesses        : 136
-ProcHighCpuTime          : fabric
-ProcHighCpuTime%         : 3
-ProcHighMem              : w3wp
-ProcHighMemGB            : 0.652
-ProcHighRead             : sqlservr
-ProcHighReadMB           : 0.013
-ProcHighWrite            : w3wp
-ProcHighWriteMB          : 0.005
-ProcMostThreads          : rtcsrv
-ProcMostThreadsCount     : 131
-DiskFreeC                : 73
-DiskFreeD                : 15
-EventsWarn               : 26
-EventsError              : 29
-EventsCrit               : 0
-EventsWarnSkype          : 92
-EventsErrorSkype         : 139
-EventsCritSkype          : 0
-EventsWarnSkypeLastHour  : 20
-EventsErrorSkypeLastHour : 10
-EventsCritSkypeLastHour  : 0
-ActiveSkypeUsers         : 0
-AvMcuSkypeUsers          : 0
-AsMcuSkypeUsers          : 0
-
-Date                     : 3/24/2021 1:50:23 PM
+Date                     : 4/13/2021 4:47:56 PM
 Computer                 : AZ-AG04
-BootTime                 : 3/24/2021 1:35:51 PM
-OS                       : Microsoft Windows Server 2016 Datacenter
+BootTime                 : 4/13/2021 3:21:19 PM
+OS                       : Microsoft Windows Server 2019 Datacenter
 Model                    : Virtual Machine
-CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
-MaxClock                 : 2295
+CoreName                 : Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz
+MaxClock                 : 2095
 Cores                    : 2
-CpuTotal%                : 14
-CPU1%                    : 16
-CPU2%                    : 12
-CPU3%                    : 0
-CPU4%                    : 0
-MemoryFreeGB             : 0.868
-MemoryPagedGB            : 0.688
-MemoryUsed%              : 78
-ServicesRunning          : 75
-NumberOfProcesses        : 95
-ProcHighCpuTime          : powershell
-ProcHighCpuTime%         : 5
+CpuTotal%                : 1
+CpuPerCore%              : {2, 0}
+MemoryFreeGB             : 4.274
+MemoryPagedGB            : 1.25
+MemoryUsed%              : 47
+ServicesRunning          : 77
+ProcessesRunning         : 97
+ProcHighCpuTime          : msmpeng
+ProcHighCpuTime%         : 0.78
 ProcHighMem              : sqlservr
-ProcHighMemGB            : 1.841
+ProcHighMemGB            : 2.235
 ProcHighRead             : microsoftdependencyagent
-ProcHighReadMB           : 0.002
-ProcHighWrite            : sqlceip
+ProcHighReadMB           : 0
+ProcHighWrite            : svchost
 ProcHighWriteMB          : 0
 ProcMostThreads          : sqlservr
-ProcMostThreadsCount     : 69
-DiskFreeC                : 189
-DiskFreeD                : 7
-EventsWarn               : 16
-EventsError              : 79
+ProcMostThreadsCount     : 68
+DiskFreeC                : 192
+DiskFreeD                : 15
+DiskFreeE                : 0
+EventsLastHour           : 6
 EventsCrit               : 0
-EventsWarnSkype          : 0
-EventsErrorSkype         : 0
+EventsError              : 24
+EventsWarn               : 3
+EventMostProvider        : ESENT
+EventMostId              : 490
+EventMostCount           : 12
 EventsCritSkype          : 0
-EventsWarnSkypeLastHour  : 0
-EventsErrorSkypeLastHour : 0
+EventsErrorSkype         : 0
+EventsWarnSkype          : 0
+EventMostSkype           : 
+EventMostSkypeId         : 
+EventMostSkypeCount      : 0
 EventsCritSkypeLastHour  : 0
+EventsErrorSkypeLastHour : 0
+EventsWarnSkypeLastHour  : 0
 ActiveSkypeUsers         : 
 AvMcuSkypeUsers          : 
 AsMcuSkypeUsers          : 
 
+Date                     : 4/13/2021 4:47:57 PM
+Computer                 : AZ-FE1D
+BootTime                 : 4/13/2021 3:22:34 PM
+OS                       : Microsoft Windows Server 2019 Datacenter
+Model                    : Virtual Machine
+CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
+MaxClock                 : 2295
+Cores                    : 2
+CpuTotal%                : 23
+CpuPerCore%              : {28, 18}
+MemoryFreeGB             : 4.94
+MemoryPagedGB            : 1.25
+MemoryUsed%              : 38
+ServicesRunning          : 94
+ProcessesRunning         : 109
+ProcHighCpuTime          : clsagent
+ProcHighCpuTime%         : 14.81
+ProcHighMem              : svchost
+ProcHighMemGB            : 0.686
+ProcHighRead             : sqlservr
+ProcHighReadMB           : 0.026
+ProcHighWrite            : sqlservr
+ProcHighWriteMB          : 0.184
+ProcMostThreads          : sqlservr
+ProcMostThreadsCount     : 74
+DiskFreeC                : 80
+DiskFreeD                : 15
+DiskFreeE                : 0
+EventsLastHour           : 4
+EventsCrit               : 0
+EventsError              : 16
+EventsWarn               : 8
+EventMostProvider        : Service Control Manager
+EventMostId              : 7024
+EventMostCount           : 8
+EventsCritSkype          : 0
+EventsErrorSkype         : 69
+EventsWarnSkype          : 12
+EventMostSkype           : LS Health Agent
+EventMostSkypeId         : 56011
+EventMostSkypeCount      : 40
+EventsCritSkypeLastHour  : 0
+EventsErrorSkypeLastHour : 34
+EventsWarnSkypeLastHour  : 5
+ActiveSkypeUsers         : 2
+AvMcuSkypeUsers          : 2
+AsMcuSkypeUsers          : 0
 ```
