@@ -55,6 +55,7 @@ workflow FLOW {
                 
                 # os
                 $os = get-wmiobject Win32_OperatingSystem
+				$LastUpdate = (Get-WinEvent -FilterHashTable @{LogName="SETUP";ProviderName="Microsoft-Windows-Servicing";ID=2} | ? {$_.Message -like "*KB*"} | select -First 1).TimeCreated
                 
                 # events
                 $today = (Get-Date -Hour 0 -Minute 00 -Second 00)
@@ -85,13 +86,16 @@ workflow FLOW {
                     Computer    = $env:COMPUTERNAME                 
                     BootTime    = $os.ConvertToDateTime($os.LastBootUpTime) 
                     OS          = $os.Caption
+					Build		= ([System.Environment]::OSVersion).Version
+					LastUpdate	= $LastUpdate 
                     Model       = $((get-wmiobject Win32_ComputerSystem).Model)
                     CoreName    = $cpu.Name | select -first 1
                     MaxClock    = $cpu.MaxClockSpeed
                     Cores       = $cpu.NumberOfLogicalProcessors            
                     'CpuTotal%'     = $cputimes[-1]
                     'CpuPerCore%'   = $cputimes[0..$($cputimes.Length - 2)]
-                    MemoryFreeGB    = $MemoryFree 
+					MemoryGB		= [math]::Round(($memory.TotalVisibleMemorySize)/1mb)
+                    MemoryFreeGB    = $MemoryFree					
                     MemoryPagedGB   = [math]::Round(($memory.TotalVirtualMemorySize - $memory.TotalVisibleMemorySize)/1mb,3)
                     'MemoryUsed%'   = [math]::Round((($memory.TotalVisibleMemorySize) - $MemoryFree*1mb) / $memory.TotalVisibleMemorySize * 100)                
                     ServicesRunning     = (Get-Service | where Status -eq "running").count
