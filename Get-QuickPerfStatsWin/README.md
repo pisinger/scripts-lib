@@ -4,7 +4,19 @@ This script returns a quick overview for some perf related counters, the number 
 
 Feel free to add more specific counters you are interested in.
 
+
+
 **Examples**
+```
+$results = .\Get-QuickPerfStatsWin.ps1
+
+$results | ft computer, net* -AutoSize
+$results | ft computer, core* -AutoSize
+$results | ft computer, proc* -AutoSize
+$results | ft computer, event* -AutoSize
+```
+
+**Sample Output**
 ```
 Date                     : 4/13/2021 4:47:56 PM
 Computer                 : AZ-AG04
