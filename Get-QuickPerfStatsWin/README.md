@@ -12,45 +12,52 @@ $results | ft computer, net* -AutoSize
 $results | ft computer, cpu* -AutoSize
 $results | ft computer, proc* -AutoSize
 $results | ft computer, event* -AutoSize
+$results | ft computer, sys* -AutoSize
 ```
 
 **Sample Output**
 ```
-Date                     : 4/13/2021 4:47:56 PM
+Date                     : 4/15/2021 4:14:05 PM
 Computer                 : AZ-AG04
-BootTime                 : 4/13/2021 3:21:19 PM
-OS                       : Microsoft Windows Server 2019 Datacenter
-Model                    : Virtual Machine
-CoreName                 : Intel(R) Xeon(R) Platinum 8171M CPU @ 2.60GHz
-MaxClock                 : 2095
-Cores                    : 2
-CpuTotal%                : 1
-CpuPerCore%              : {2, 0}
-MemoryFreeGB             : 4.274
-MemoryPagedGB            : 1.25
-MemoryUsed%              : 47
-ServicesRunning          : 77
-ProcessesRunning         : 97
-ProcHighCpuTime          : msmpeng
-ProcHighCpuTime%         : 0.78
+SysBootTime              : 4/15/2021 2:33:32 PM
+SysOS                    : Microsoft Windows Server 2019 Datacenter
+SysBuild                 : 10.0.17763.0
+SysLastUpdate            : 4/15/2021 2:35:53 PM
+SysModel                 : Virtual Machine
+CpuName                  : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
+CpuMaxClock              : 2295
+CpuCores                 : 2
+CpuTotal%                : 36
+CpuPerCore%              : {48, 25}
+MemoryGB                 : 4
+MemoryFreeGB             : 0.676
+MemoryPagedGB            : 0.688
+MemoryUsed%              : 83
+ServicesRunning          : 75
+ProcessesRunning         : 95
+ProcHighCpuTime          : sqlceip
+ProcHighCpuTime%         : 0
 ProcHighMem              : sqlservr
-ProcHighMemGB            : 2.235
+ProcHighMemGB            : 1.907
 ProcHighRead             : microsoftdependencyagent
-ProcHighReadMB           : 0
+ProcHighReadMB           : 0.001
 ProcHighWrite            : svchost
 ProcHighWriteMB          : 0
 ProcMostThreads          : sqlservr
-ProcMostThreadsCount     : 68
-DiskFreeC                : 192
-DiskFreeD                : 15
+ProcMostThreadsCount     : 73
+DiskFreeC                : 191
+DiskFreeD                : 7
 DiskFreeE                : 0
-EventsLastHour           : 6
-EventsCrit               : 0
-EventsError              : 24
-EventsWarn               : 3
+NetPacketsDiscarded      : {0}
+NetPacketsSentGbps       : {0.000}
+NetPacketsRecvGbps       : {0.000}
+EventsLastHour           : 12
+EventsCrit               : 1
+EventsError              : 122
+EventsWarn               : 18
 EventTopProvider         : ESENT
-EventTopId               : 490
-EventTopCount            : 12
+EventTopId               : 17806
+EventTopCount            : 48
 EventsCritSkype          : 0
 EventsErrorSkype         : 0
 EventsWarnSkype          : 0
@@ -64,51 +71,57 @@ ActiveSkypeUsers         :
 AvMcuSkypeUsers          : 
 AsMcuSkypeUsers          : 
 
-Date                     : 4/13/2021 4:47:57 PM
-Computer                 : AZ-FE1D
-BootTime                 : 4/13/2021 3:22:34 PM
-OS                       : Microsoft Windows Server 2019 Datacenter
-Model                    : Virtual Machine
-CoreName                 : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
-MaxClock                 : 2295
-Cores                    : 2
-CpuTotal%                : 23
-CpuPerCore%              : {28, 18}
-MemoryFreeGB             : 4.94
+Date                     : 4/15/2021 4:14:07 PM
+Computer                 : AZ-FE1C
+SysBootTime              : 4/15/2021 3:38:32 PM
+SysOS                    : Microsoft Windows Server 2019 Datacenter
+SysBuild                 : 10.0.17763.0
+SysLastUpdate            : 4/15/2021 2:49:12 PM
+SysModel                 : Virtual Machine
+CpuName                  : Intel(R) Xeon(R) CPU E5-2673 v4 @ 2.30GHz
+CpuMaxClock              : 2295
+CpuCores                 : 2
+CpuTotal%                : 1
+CpuPerCore%              : {0, 2}
+MemoryGB                 : 8
+MemoryFreeGB             : 3.519
 MemoryPagedGB            : 1.25
-MemoryUsed%              : 38
-ServicesRunning          : 94
-ProcessesRunning         : 109
-ProcHighCpuTime          : clsagent
-ProcHighCpuTime%         : 14.81
-ProcHighMem              : svchost
-ProcHighMemGB            : 0.686
+MemoryUsed%              : 56
+ServicesRunning          : 104
+ProcessesRunning         : 133
+ProcHighCpuTime          : svchost
+ProcHighCpuTime%         : 3.12
+ProcHighMem              : w3wp
+ProcHighMemGB            : 0.764
 ProcHighRead             : sqlservr
-ProcHighReadMB           : 0.026
+ProcHighReadMB           : 0.019
 ProcHighWrite            : sqlservr
-ProcHighWriteMB          : 0.184
-ProcMostThreads          : sqlservr
-ProcMostThreadsCount     : 74
-DiskFreeC                : 80
+ProcHighWriteMB          : 0.022
+ProcMostThreads          : rtcsrv
+ProcMostThreadsCount     : 112
+DiskFreeC                : 73
 DiskFreeD                : 15
 DiskFreeE                : 0
-EventsLastHour           : 4
+NetPacketsDiscarded      : {0}
+NetPacketsSentGbps       : {0.000}
+NetPacketsRecvGbps       : {0.000}
+EventsLastHour           : 26
 EventsCrit               : 0
-EventsError              : 16
-EventsWarn               : 8
-EventTopProvider         : Service Control Manager
-EventTopId               : 7024
-EventTopCount            : 8
+EventsError              : 27
+EventsWarn               : 38
+EventTopProvider         : Microsoft-Windows-Perflib
+EventTopId               : 1008
+EventTopCount            : 24
 EventsCritSkype          : 0
-EventsErrorSkype         : 69
-EventsWarnSkype          : 12
-EventTopSkype            : LS Health Agent
-EventTopSkypeId          : 56011
-EventTopSkypeCount       : 40
+EventsErrorSkype         : 103
+EventsWarnSkype          : 79
+EventTopSkype            : LS User Services
+EventTopSkypeId          : 32179
+EventTopSkypeCount       : 67
 EventsCritSkypeLastHour  : 0
-EventsErrorSkypeLastHour : 34
-EventsWarnSkypeLastHour  : 5
-ActiveSkypeUsers         : 2
-AvMcuSkypeUsers          : 2
+EventsErrorSkypeLastHour : 30
+EventsWarnSkypeLastHour  : 21
+ActiveSkypeUsers         : 1
+AvMcuSkypeUsers          : 0
 AsMcuSkypeUsers          : 0
 ```

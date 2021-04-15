@@ -84,11 +84,11 @@ workflow FLOW {
                 $object = [PSCustomObject]@{
                     Date        = Get-date
                     Computer    = $env:COMPUTERNAME                 
-                    BootTime    = $os.ConvertToDateTime($os.LastBootUpTime) 
-                    OS          = $os.Caption
-					Build		= ([System.Environment]::OSVersion).Version
-					LastUpdate	= $LastUpdate 
-                    Model       = $((get-wmiobject Win32_ComputerSystem).Model)
+                    SysBootTime    	= $os.ConvertToDateTime($os.LastBootUpTime) 
+                    SysOS          	= $os.Caption
+					SysBuild		= ([System.Environment]::OSVersion).Version
+					SysLastUpdate	= $LastUpdate 
+                    SysModel       	= $((get-wmiobject Win32_ComputerSystem).Model)
                     CpuName    	= $cpu.Name | select -first 1
                     CpuMaxClock = $cpu.MaxClockSpeed
                     CpuCores    = $cpu.NumberOfLogicalProcessors            
