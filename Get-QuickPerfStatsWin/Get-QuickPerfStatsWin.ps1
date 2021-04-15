@@ -89,9 +89,9 @@ workflow FLOW {
 					Build		= ([System.Environment]::OSVersion).Version
 					LastUpdate	= $LastUpdate 
                     Model       = $((get-wmiobject Win32_ComputerSystem).Model)
-                    CoreName    = $cpu.Name | select -first 1
-                    MaxClock    = $cpu.MaxClockSpeed
-                    Cores       = $cpu.NumberOfLogicalProcessors            
+                    CpuName    	= $cpu.Name | select -first 1
+                    CpuMaxClock = $cpu.MaxClockSpeed
+                    CpuCores    = $cpu.NumberOfLogicalProcessors            
                     'CpuTotal%'     = $cputimes[-1]
                     'CpuPerCore%'   = $cputimes[0..$($cputimes.Length - 2)]
 					MemoryGB		= [math]::Round(($memory.TotalVisibleMemorySize)/1mb)
