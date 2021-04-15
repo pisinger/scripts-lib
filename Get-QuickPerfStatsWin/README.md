@@ -9,7 +9,7 @@ Feel free to add more specific counters you are interested in.
 $results = .\Get-QuickPerfStatsWin.ps1
 
 $results | ft computer, net* -AutoSize
-$results | ft computer, core* -AutoSize
+$results | ft computer, cpu* -AutoSize
 $results | ft computer, proc* -AutoSize
 $results | ft computer, event* -AutoSize
 ```
