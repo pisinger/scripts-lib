@@ -1,13 +1,13 @@
 # https://github.com/pisinger
 
 <#
-	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-	SOFTWARE.
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
 #>
 
 $computers = (Get-CsPool | ? {$_.Services -like "*UserServer*"}).Computers
@@ -27,7 +27,7 @@ workflow FLOW {
                     "\LS:AsMcu - AsMcu Conferences\ASMCU - Connected Users"
                 )
                 
-				$results = get-counter -counter $using:counters -ErrorAction SilentlyContinue | select -expand countersamples | select cookedvalue
+                $results = get-counter -counter $using:counters -ErrorAction SilentlyContinue | select -expand countersamples | select cookedvalue
                 
                 # cpu
                 $resultsCPU = get-counter -counter "\Processor(*)\% Processor Time" -ErrorAction SilentlyContinue | select -expand countersamples | select cookedvalue              
@@ -36,7 +36,7 @@ workflow FLOW {
                 $cpu = Get-WmiObject -class Win32_processor | select Name, NumberOfLogicalProcessors, MaxClockSpeed
                 $cores = 0
                 $cpu | foreach {$cores += $_.NumberOfLogicalProcessors}
-				
+                
                 # network
                 $resultsPacketsDiscarded = (Get-Counter "\Network Interface(*)\Packets Received Discarded") | select -expand countersamples | where InstanceName -notlike "*isatap*" | select cookedvalue
                 $NetPacketsDiscarded = @(); $resultsPacketsDiscarded | foreach {$NetPacketsDiscarded += [math]::round($_.cookedvalue)}
@@ -55,7 +55,7 @@ workflow FLOW {
                 
                 # os
                 $os = get-wmiobject Win32_OperatingSystem
-				$LastUpdate = (Get-WinEvent -FilterHashTable @{LogName="SETUP";ProviderName="Microsoft-Windows-Servicing";ID=2} | ? {$_.Message -like "*KB*"} | select -First 1).TimeCreated
+                $LastUpdate = (Get-WinEvent -FilterHashTable @{LogName="SETUP";ProviderName="Microsoft-Windows-Servicing";ID=2} | ? {$_.Message -like "*KB*"} | select -First 1).TimeCreated
                 
                 # events
                 $today = (Get-Date -Hour 0 -Minute 00 -Second 00)
@@ -86,15 +86,15 @@ workflow FLOW {
                     Computer    = $env:COMPUTERNAME                 
                     SysBootTime    	= $os.ConvertToDateTime($os.LastBootUpTime) 
                     SysOS          	= $os.Caption
-					SysBuild		= ([System.Environment]::OSVersion).Version
-					SysLastUpdate	= $LastUpdate 
+                    SysBuild		= ([System.Environment]::OSVersion).Version
+                    SysLastUpdate	= $LastUpdate 
                     SysModel       	= $((get-wmiobject Win32_ComputerSystem).Model)
                     CpuName    	= $cpu.Name | select -first 1
                     CpuMaxClock = $cpu.MaxClockSpeed
                     CpuCores    = $cpu.NumberOfLogicalProcessors            
                     'CpuTotal%'     = $cputimes[-1]
                     'CpuPerCore%'   = $cputimes[0..$($cputimes.Length - 2)]
-					MemoryGB		= [math]::Round(($memory.TotalVisibleMemorySize)/1mb)
+                    MemoryGB		= [math]::Round(($memory.TotalVisibleMemorySize)/1mb)
                     MemoryFreeGB    = $MemoryFree					
                     MemoryPagedGB   = [math]::Round(($memory.TotalVirtualMemorySize - $memory.TotalVisibleMemorySize)/1mb,3)
                     'MemoryUsed%'   = [math]::Round((($memory.TotalVisibleMemorySize) - $MemoryFree*1mb) / $memory.TotalVisibleMemorySize * 100)                
