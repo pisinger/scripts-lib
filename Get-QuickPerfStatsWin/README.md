@@ -4,6 +4,8 @@ This script returns a quick overview for some perf related counters, the number 
 
 Feel free to add more specific counters you are interested in.
 
+Note: WinRM required.
+
 **Examples**
 ```
 $results = .\Get-QuickPerfStatsWin.ps1
