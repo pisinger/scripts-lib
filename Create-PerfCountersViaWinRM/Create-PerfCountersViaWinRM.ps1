@@ -12,17 +12,17 @@
 
 # specify the counters
 Function PerfCounterConfig{
-    New-Item $ConfigPath -type file -Force | Out-Null	
-    # System Performance Counters
-    Add-Content $ConfigPath "`"\Processor Information(*)\% Processor Time`""
-    Add-Content $ConfigPath "`"\Memory\Available Mbytes`""
-    Add-Content $ConfigPath "`"\Network Interface(*)\Output Queue Length`""
-    Add-Content $ConfigPath "`"\Network Interface(*)\Outbound Packets Discarded`""
-    Add-Content $ConfigPath "`"\Network Interface(*)\Inbound Packets Discarded`""
-    Add-Content $ConfigPath "`"\Network Interface(*)\Packets Outbound Discarded`""
-    Add-Content $ConfigPath "`"\Network Interface(*)\Packets Received Discarded`""
-    Add-Content $ConfigPath "`"\PhysicalDisk(*)\Avg. Disk sec/Read`""
-    Add-Content $ConfigPath "`"\PhysicalDisk(*)\Avg. Disk sec/Write`""
+	New-Item $ConfigPath -type file -Force | Out-Null	
+	# System Performance Counters
+	Add-Content $ConfigPath "`"\Processor Information(*)\% Processor Time`""
+	Add-Content $ConfigPath "`"\Memory\Available Mbytes`""
+	Add-Content $ConfigPath "`"\Network Interface(*)\Output Queue Length`""
+	Add-Content $ConfigPath "`"\Network Interface(*)\Outbound Packets Discarded`""
+	Add-Content $ConfigPath "`"\Network Interface(*)\Inbound Packets Discarded`""
+	Add-Content $ConfigPath "`"\Network Interface(*)\Packets Outbound Discarded`""
+	Add-Content $ConfigPath "`"\Network Interface(*)\Packets Received Discarded`""
+	Add-Content $ConfigPath "`"\PhysicalDisk(*)\Avg. Disk sec/Read`""
+	Add-Content $ConfigPath "`"\PhysicalDisk(*)\Avg. Disk sec/Write`""
 }
 
 # call function to create config file on local machine
@@ -35,29 +35,29 @@ $computers = "node01","node02","node03"
 
 foreach ($c in $computers){
 
-    Invoke-Command -ComputerName $c -ScriptBlock {
-        $computer = hostname
-        $computer
+	Invoke-Command -ComputerName $c -ScriptBlock {
+		$computer = hostname
+		$computer
 
-        # save config in temp file
-        $using:config | out-file $using:ConfigPath -Force
+		# save config in temp file
+		$using:config | out-file $using:ConfigPath -Force
 
-        $logmanBin = $env:SystemRoot + "\System32\logman.exe"
-        
+		$logmanBin = $env:SystemRoot + "\System32\logman.exe"
+		
 		# -r = repeat every day
 		# -rf = run for 16h
-        $logmanSyntax = " create counter KHI -o C:\PerfLogs\KHI_$computer -f csv -si 90 -v mmddhhmm -max 50 -b 09/25/2020 06:00:00 -r -rf 16:00:00 -cf $using:ConfigPath"		
-        #$logmanSyntax = " update KHI -b 09/30/2020 06:00:00 -r -rf 16:00:00"
-        #$logmanSyntax = " delete KHI"
-        #$logmanSyntax = " stop KHI"
-        #$logmanSyntax = " start KHI"
+		$logmanSyntax = " create counter KHI -o C:\PerfLogs\KHI_$computer -f csv -si 90 -v mmddhhmm -max 50 -b 09/25/2020 06:00:00 -r -rf 16:00:00 -cf $using:ConfigPath"		
+		#$logmanSyntax = " update KHI -b 09/30/2020 06:00:00 -r -rf 16:00:00"
+		#$logmanSyntax = " delete KHI"
+		#$logmanSyntax = " stop KHI"
+		#$logmanSyntax = " start KHI"
 
-        $cmdLine = $logmanBin + $logmanSyntax
-        Invoke-Expression $cmdLine
+		$cmdLine = $logmanBin + $logmanSyntax
+		Invoke-Expression $cmdLine
 
-        # remove temp config file
-        Remove-Item "$using:ConfigPath" -Force
-    }
+		# remove temp config file
+		Remove-Item "$using:ConfigPath" -Force
+	}
 }
 # remove config from local machine
 Remove-Item "$ConfigPath" -Force
