@@ -8,8 +8,8 @@ Note: WinRM required.
 
 **Examples**
 ```
-$results = .\Get-QuickPerfStatsWin.ps1									# will run on localhost only
-$results = .\Get-QuickPerfStatsWin.ps1 -SkypeFrontEnds					# will run against all Skype FEs
+$results = .\Get-QuickPerfStatsWin.ps1							# will run on localhost only
+$results = .\Get-QuickPerfStatsWin.ps1 -SkypeFrontEnds				# will run against all Skype FEs
 $results = .\Get-QuickPerfStatsWin.ps1 -Computers Node1,Node2,Node3		# will run against specific computers
 
 $results | ft computer, net* -AutoSize
