@@ -10,8 +10,14 @@
 	SOFTWARE.
 #>
 
-$computers = (Get-CsPool | ? {$_.Services -like "*UserServer*"}).Computers
-#$computers = "Node01","Node02","Node03"
+param (
+	[array]$Computers,	# "Node01","Node02","Node03"
+	[switch]$SkypeFrontEnds
+)
+
+IF ($SkypeFrontEnds) {$computers = (Get-CsPool | ? {$_.Services -like "*UserServer*"}).Computers}
+ELSEIF ($Computers) {$computers = $computers}
+ELSE {$computers = "localhost" }
 
 workflow FLOW {
 	param ([string[]]$computers)
@@ -89,9 +95,9 @@ workflow FLOW {
 					SysBuild		= ([System.Environment]::OSVersion).Version
 					SysLastUpdate	= $LastUpdate 
 					SysModel       	= $((get-wmiobject Win32_ComputerSystem).Model)
-					CpuName    	= $cpu.Name | select -first 1
-					CpuMaxClock = $cpu.MaxClockSpeed
-					CpuCores    = $cpu.NumberOfLogicalProcessors            
+					CpuName    		= $cpu.Name | select -first 1
+					CpuMaxClock 	= $cpu.MaxClockSpeed
+					CpuCores   		= $cpu.NumberOfLogicalProcessors            
 					'CpuTotal%'     = $cputimes[-1]
 					'CpuPerCore%'   = $cputimes[0..$($cputimes.Length - 2)]
 					MemoryGB		= [math]::Round(($memory.TotalVisibleMemorySize)/1mb)
