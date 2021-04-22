@@ -15,10 +15,10 @@ param (
 	[switch]$SkypeFrontEnds
 )
 
-IF ($SkypeFrontEnds) {$computers = (Get-CsPool | ? {$_.Services -like "*UserServer*"}).Computers}
-ELSEIF ($Computers) {$computers = $computers}
-ELSE {$computers = "localhost" }
-	
+IF ($SkypeFrontEnds) {$computers = (Get-CsPool | ? {$_.Services -like "*UserServer*"}).Computers; $EventService = "Lync Server"}
+ELSEIF ($Computers) {$computers = $computers; $EventService = "Windows Powershell"}
+ELSE {$computers = "localhost"; $EventService = "Windows Powershell"}
+
 Invoke-Command -ComputerName $Computers -ScriptBlock {
 	$Counters = @(
 		"\Memory\Available MBytes"
@@ -65,10 +65,10 @@ Invoke-Command -ComputerName $Computers -ScriptBlock {
 	$EventTopProvider = (($events | group-object ProviderName | sort-object Count -Descending) | select-object -First 1)
 	$EventTopId = ($events | group-object Id | sort-object Count -Descending | select-object -First 1).Name         
 	
-	$eventsSkype = Get-WinEvent -ErrorAction SilentlyContinue -FilterHashtable @{LogName = "Lync Server"; StartTime = $today; Level = 1,2,3}
-	$EventTopSkype = ($eventsSkype | group-object ProviderName | sort-object Count -Descending | select-object -First 1)
-	$EventTopSkypeId = ($eventsSkype | group-object Id | sort-object Count -Descending | select-object -First 1).Name
-	$eventsSkypeLastHour = $eventsSkype | where-object TimeCreated -gt $LastHour
+	$eventsService = Get-WinEvent -ErrorAction SilentlyContinue -FilterHashtable @{LogName = $using:eventService; StartTime = $today; Level = 1,2,3}
+	$EventTopService = ($eventsService | group-object ProviderName | sort-object Count -Descending | select-object -First 1)
+	$EventTopServiceId = ($eventsService | group-object Id | sort-object Count -Descending | select-object -First 1).Name
+	$eventsServiceLastHour = $eventsService | where-object TimeCreated -gt $LastHour
 	
 	# disk
 	$partitions = Get-PSDrive -Name C,D,E -ErrorAction SilentlyContinue
@@ -122,18 +122,18 @@ Invoke-Command -ComputerName $Computers -ScriptBlock {
 		EventTopProvider    = $EventTopProvider.Name
 		EventTopId          = $EventTopId
 		EventTopCount       = $EventTopProvider.Count
-		EventsCritSkype     = ($eventsSkype | where-object Level -eq 1).Count
-		EventsErrorSkype    = ($eventsSkype | where-object Level -eq 2).Count              
-		EventsWarnSkype     = ($eventsSkype | where-object Level -eq 3).Count
-		EventTopSkype       = $EventTopSkype.Name
-		EventTopSkypeId     = $EventTopSkypeId
-		EventTopSkypeCount  = $EventTopSkype.Count
-		EventsCritSkypeLastHour     = ($eventsSkypeLastHour | where-object Level -eq 1).Count
-		EventsErrorSkypeLastHour    = ($eventsSkypeLastHour | where-object Level -eq 2).Count
-		EventsWarnSkypeLastHour     = ($eventsSkypeLastHour | where-object Level -eq 3).Count                   
-		ActiveSkypeUsers    = $results[1].CookedValue   
-		AvMcuSkypeUsers     = $results[2].CookedValue
-		AsMcuSkypeUsers     = $results[3].CookedValue
+		EventsServiceCrit   = ($eventsService | where-object Level -eq 1).Count
+		EventsServiceError  = ($eventsService | where-object Level -eq 2).Count              
+		EventsServiceWarn   = ($eventsService | where-object Level -eq 3).Count
+		EventTopService       = $EventTopService.Name
+		EventTopServiceId     = $EventTopServiceId
+		EventTopServiceCount  = $EventTopService.Count
+		EventsServiceLastHourCrit   = ($eventsServiceLastHour | where-object Level -eq 1).Count
+		EventsServiceLastHourError	= ($eventsServiceLastHour | where-object Level -eq 2).Count
+		EventsServiceLastHourWarn   = ($eventsServiceLastHour | where-object Level -eq 3).Count                   
+		SkypeUsersActive    = $results[1].CookedValue   
+		SkypeUsersAvMcu     = $results[2].CookedValue
+		SkypeUsersAsMcu     = $results[3].CookedValue
 	}
 	return $object
 }
