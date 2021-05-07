@@ -1,4 +1,4 @@
-# Get-TeamsUserActivityReports
+# Get-TeamsUserActivityReport
  
 The snipplet does cover downloading and parsing of the TeamsUserActivityUserDetail report only.
 Not included is the step to acquire an access token to call the report api
