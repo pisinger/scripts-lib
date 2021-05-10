@@ -33,31 +33,29 @@ $global:config = Get-Content $ConfigPath
 # Specify machines on which you want to configure the PerfCounters
 $computers = "node01","node02","node03"
 
-foreach ($c in $computers){
+Invoke-Command -ComputerName $computers -ScriptBlock {
+	$computer = hostname
+	$computer
 
-	Invoke-Command -ComputerName $c -ScriptBlock {
-		$computer = hostname
-		$computer
+	# save config in temp file
+	$using:config | out-file $using:ConfigPath -Force
 
-		# save config in temp file
-		$using:config | out-file $using:ConfigPath -Force
-
-		$logmanBin = $env:SystemRoot + "\System32\logman.exe"
+	$logmanBin = $env:SystemRoot + "\System32\logman.exe"
 		
-		# -r = repeat every day
-		# -rf = run for 16h
-		$logmanSyntax = " create counter KHI -o C:\PerfLogs\KHI_$computer -f csv -si 90 -v mmddhhmm -max 50 -b 09/25/2020 06:00:00 -r -rf 16:00:00 -cf $using:ConfigPath"		
-		#$logmanSyntax = " update KHI -b 09/30/2020 06:00:00 -r -rf 16:00:00"
-		#$logmanSyntax = " delete KHI"
-		#$logmanSyntax = " stop KHI"
-		#$logmanSyntax = " start KHI"
+	# -r = repeat every day
+	# -rf = run for 16h
+	$logmanSyntax = " create counter KHI -o C:\PerfLogs\KHI_$computer -f csv -si 90 -v mmddhhmm -max 50 -b 09/25/2020 06:00:00 -r -rf 16:00:00 -cf $using:ConfigPath"		
+	#$logmanSyntax = " update KHI -b 09/30/2020 06:00:00 -r -rf 16:00:00"
+	#$logmanSyntax = " delete KHI"
+	#$logmanSyntax = " stop KHI"
+	#$logmanSyntax = " start KHI"
 
-		$cmdLine = $logmanBin + $logmanSyntax
-		Invoke-Expression $cmdLine
+	$cmdLine = $logmanBin + $logmanSyntax
+	Invoke-Expression $cmdLine
 
-		# remove temp config file
-		Remove-Item "$using:ConfigPath" -Force
-	}
+	# remove temp config file
+	Remove-Item "$using:ConfigPath" -Force
 }
+
 # remove config from local machine
 Remove-Item "$ConfigPath" -Force
