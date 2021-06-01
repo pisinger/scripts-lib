@@ -31,7 +31,8 @@ param (
 	[array]$Category = "Any",
 	[ValidateSet("IPv4","IPv6")]
 	[string]$IPVersion,
-	[bool]$Required,
+	[ValidateSet("True","False")]
+	[string]$Required,
 	[switch]$URLsOnly,
 	[switch]$IPsOnly,
 	[switch]$HttpOnly,

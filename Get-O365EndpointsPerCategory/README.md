@@ -13,16 +13,17 @@ https://aka.ms/o365ips
 
 **Examples**
 ```
-.\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category Any -Required $True -HttpOnly
+.\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category Any -Required True -HttpOnly
+.\Get-O365EndpointsPerCategory.ps1 -Service Any -Category OptimizeAllow -IPVersion IPv4 -Required True -URLsOnly -HttpOnly
 .\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category Optimize
 .\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category OptimizeAllow -IPsOnly
 .\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category OptimizeAllow -URLsOnly
-.\Get-O365EndpointsPerCategory.ps1 -Service Exchange -Category Allow -IPversion IPv6 -Required $True
+.\Get-O365EndpointsPerCategory.ps1 -Service Exchange -Category Allow -IPversion IPv6 -Required True
 .\Get-O365EndpointsPerCategory.ps1 -Service Any -Category Optimize
 .\Get-O365EndpointsPerCategory.ps1 -Category Optimize -IPVersion IPv4
 .\Get-O365EndpointsPerCategory.ps1 -Category OptimizeAllow -URLsOnly
-.\Get-O365EndpointsPerCategory.ps1 -Service Any -Category Allow -Required $True -IPVersion IPv6
-.\Get-O365EndpointsPerCategory.ps1 -Service Common -Category Allow -Required $True -IPversion IPv4
+.\Get-O365EndpointsPerCategory.ps1 -Service Any -Category Allow -Required True -IPVersion IPv6
+.\Get-O365EndpointsPerCategory.ps1 -Service Common -Category Allow -Required True -IPversion IPv4
 ```
 
 **The below picture shows the output for the following**
