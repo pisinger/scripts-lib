@@ -59,6 +59,7 @@ $output = Invoke-Command -ComputerName $Computers -ScriptBlock {
 	$results = get-counter -counter $counters | select -expand countersamples | select cookedvalue
 	
 	$object = [PSCustomObject]@{
+		Date        = "{0:dd.MM.yyyy HH:mm}" -f (Get-date)
 		Computer    = hostname						
 		'CPU%' 		= [math]::Round($results[0].CookedValue)
 		RamFree		= $results[1].CookedValue					
@@ -89,4 +90,13 @@ $output = Invoke-Command -ComputerName $Computers -ScriptBlock {
 
 $output = $output | select -Property * -ExcludeProperty PSComputerName, RunspaceId, PSSourceJobInstanceId
 $output | fl
-#$output | Export-Csv C:\temp\mcu-load.csv
+
+<#
+	$ExportPath = "C:\temp\mcu-load.csv"
+	IF (Get-item $ExportPath -ErrorAction SilentlyContinue) {
+		$output | Export-Csv $ExportPath -Append
+	}
+	ELSE {
+		$output | Export-Csv $ExportPath
+	}
+#>
