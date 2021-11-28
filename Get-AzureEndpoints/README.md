@@ -7,7 +7,7 @@ Note: First run will take some time due to initial parsing.
 https://www.microsoft.com/en-us/download/details.aspx?id=56519
 
 **Examples**
-```
+```powershell
 Get-AzureEndpoints | select Name -Unique | sort Name
 Get-AzureEndpoints -IPv4 | where Name -like "*frontdoor*" | ft -AutoSize
 Get-AzureEndpoints -IPv4 | where Subnets -like "147.*"
@@ -18,7 +18,7 @@ Get-AzureEndpoints -IPv4 | where Name -like *ThreatProtection* | ft
 ```
 
 **Below examples with output shown**
-```
+```powershell
 Get-AzureEndpoints -IPv4 | where Region -like "*ger*" | where Name -like "sql" | ft
 
 Name SubName            Region    Service  Subnets
@@ -45,7 +45,7 @@ Sql  GermanyWestCentral germanywc AzureSQL 51.116.249.0/27
 ```
 
 
-```
+```powershell
 Get-AzureEndpoints -IPv4 | where Subnets -like "147.*"
 
 Name    : AzureFrontDoor
@@ -57,7 +57,7 @@ Subnets : 147.243.0.0/16
 ```
 
 
-```
+```powershell
 Get-AzureEndpoints -IPv4 | where Region -like "*ger*" | ft
 
 Name                        SubName            Region    Service                     Subnets

@@ -12,7 +12,7 @@ https://aka.ms/o365ips
 ```
 
 **Examples**
-```
+```powershell
 .\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category Any -Required True -HttpOnly
 .\Get-O365EndpointsPerCategory.ps1 -Service Any -Category OptimizeAllow -IPVersion IPv4 -Required True -URLsOnly -HttpOnly
 .\Get-O365EndpointsPerCategory.ps1 -Service Skype -Category Optimize
@@ -27,7 +27,7 @@ https://aka.ms/o365ips
 ```
 
 **The below picture shows the output for the following**
-```
+```powershell
 .\Get-O365EndpointsPerCategory.ps1 -Category OptimizeAllow -URLsOnly
 .\Get-O365EndpointsPerCategory.ps1 -IPVersion IPv4 -Category Optimize
 .\Get-O365EndpointsPerCategory.ps1 -IPVersion IPv4 -Category OptimizeAllow Skype

@@ -4,7 +4,7 @@ This script can be used to deploy perf counters remotely on multiple machines by
 
 Change/specify the counters based on your needs - in this example we are using just some Basic System Counters:
 
-```
+```powershell
 Function PerfCounterConfig{
     New-Item $ConfigPath -type file -Force | Out-Null	
     #System Performance Counters

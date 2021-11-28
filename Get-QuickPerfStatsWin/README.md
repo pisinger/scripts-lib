@@ -7,7 +7,7 @@ Feel free to add more specific counters you are interested in.
 Note: WinRM required.
 
 **Examples**
-```
+```powershell
 $results = .\Get-QuickPerfStatsWin.ps1						# will run on localhost only
 $results = .\Get-QuickPerfStatsWin.ps1 -SkypeFrontEnds				# will run against all Skype FEs
 $results = .\Get-QuickPerfStatsWin.ps1 -Computers Node1,Node2,Node3		# will run against specific computers
@@ -20,7 +20,7 @@ $results | ft computer, sys* -AutoSize
 ```
 
 **Sample Output**
-```
+```powershell
 Date                       : 4/22/2021 12:15:58 PM
 Computer                   : AZ-AG04
 SysBootTime                : 4/22/2021 11:03:51 AM
