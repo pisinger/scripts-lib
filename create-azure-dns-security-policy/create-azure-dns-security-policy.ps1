@@ -1,3 +1,6 @@
+# https://github.com/pisinger/scripts-lib/blob/main/create-azure-dns-security-policy/create-azure-dns-security-policy.ps1
+# this will configure dns security policy to audit all domains in dns requests via wildcard filtering and diagnostic settings
+
 # define variables
 $ResourceGroup = "sampleDnsResourceGroup"
 $location = "swedencentral"
@@ -29,6 +32,8 @@ $vnet = $("[{id:" + $vnet + "}]")
 az dns-resolver policy vnet-link create --resource-group $ResourceGroup  --policy-name $DnsResolverPolicy --dns-resolver-policy-virtual-network-link-name "sampleVirtualNetworkLink1" --location $location --virtual-network $vnet
 
 # create diag settings
+# [{"category":"DnsResponse","enabled":true}]
+# [{"categoryGroup":"allLogs","enabled":true}]
 az monitor diagnostic-settings create --name $diagnosticSettingName --resource $resolverPolicyId --logs '[{"category":"DnsResponse","enabled":true}]' --workspace $workspaceId
 
 # set DNSQueryLogs to basic tier
