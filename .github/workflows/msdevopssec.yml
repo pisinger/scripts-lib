@@ -8,7 +8,8 @@ on:
 
 jobs:
   sample:
-
+    name: Microsoft Security DevOps
+    
     # MSDO runs on windows-latest and ubuntu-latest.
     # macos-latest supporting coming soon
     runs-on: ubuntu-latest
@@ -31,8 +32,7 @@ jobs:
       id: msdo
       with:
         # tools to use
-        tools: 
-        'bandit', 'checkov', 'eslint', 'templateanalyzer', 'terrascan', 'trivy'
+        tools: 'bandit', 'checkov', 'eslint', 'templateanalyzer', 'terrascan', 'trivy'
 
     # Upload alerts to the Security tab
     - name: Upload alerts to Security tab
