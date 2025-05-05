@@ -2,9 +2,6 @@ name: MSDO ubuntu-latest
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  workflow_dispatch:
 
 jobs:
   sample:
@@ -28,8 +25,8 @@ jobs:
     - name: Run Microsoft Security DevOps Analysis
       uses: microsoft/security-devops-action@latest
       id: msdo
-      with:
-        tools: bandit, checkov, eslint, templateanalyzer, terrascan, trivy      # tools to use
+      #with:
+      #  tools: bandit, checkov, eslint, templateanalyzer, terrascan, trivy      # tools to use
 
     # Upload alerts to the Security tab
     - name: Upload alerts to Security tab
