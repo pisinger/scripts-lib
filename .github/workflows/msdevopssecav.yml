@@ -16,10 +16,9 @@ jobs:
     
     permissions:
       contents: read
-      id-token: write
+      id-token: write           # This is required for federation to Defender for DevOps
       actions: read
-      # Write access for security-events is only required for customers looking for MSDO results to appear in the codeQL security alerts tab on GitHub (Requires GHAS)
-      security-events: write
+      security-events: write    # This is required to upload SARIF files
 
     steps:
     
@@ -41,6 +40,6 @@ jobs:
 
     # Upload alerts to the Security tab
     - name: Upload alerts to Security tab
-      uses: github/codeql-action/upload-sarif@v1
+      uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: ${{ steps.msdo.outputs.sarifFile }}
