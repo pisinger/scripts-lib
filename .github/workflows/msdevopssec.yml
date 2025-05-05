@@ -10,24 +10,23 @@ jobs:
   sample:
     name: Microsoft Security DevOps
     
-    # MSDO runs on windows-latest and ubuntu-latest.
-    # macos-latest supporting coming soon
+    # MSDO runs on windows-latest and ubuntu-latest
     runs-on: ubuntu-latest
     
     permissions:
       contents: read
-      id-token: write           # This is required for federation to Defender for DevOps
       actions: read
+      id-token: write           # This is required for federation to Defender for DevOps      
       security-events: write    # This is required to upload SARIF files
 
     steps:
     
     # Checkout your code repository to scan
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     
     # Run analyzers
     - name: Run Microsoft Security DevOps Analysis
-      uses: microsoft/security-devops-action@preview
+      uses: microsoft/security-devops-action@latest
       id: msdo
       with:
         tools: bandit, checkov, eslint, templateanalyzer, terrascan, trivy      # tools to use
@@ -37,3 +36,10 @@ jobs:
       uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: ${{ steps.msdo.outputs.sarifFile }}
+
+    # Upload alerts file as a workflow artifact
+    - name: Upload alerts file as a workflow artifact
+      uses: actions/upload-artifact@v3
+      with:  
+        name: alerts
+        path: ${{ steps.msdo.outputs.sarifFile }}
