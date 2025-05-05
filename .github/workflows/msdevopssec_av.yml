@@ -1,4 +1,4 @@
-name: MSDO ubuntu-latest
+name: MSDO windows-latest
 on:
   push:
     branches: [ main ]
@@ -11,7 +11,7 @@ jobs:
 
     # MSDO runs on windows-latest and ubuntu-latest.
     # macos-latest supporting coming soon
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     
     permissions:
       contents: read
@@ -24,15 +24,19 @@ jobs:
     
     # Checkout your code repository to scan
     - uses: actions/checkout@v2
-    
+
+    - uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: |
+          6.0.x
+          8.0.x
+
     # Run analyzers
     - name: Run Microsoft Security DevOps Analysis
       uses: microsoft/security-devops-action@preview
       id: msdo
       with:
-        # tools to use
-        tools: 
-        'bandit', 'checkov', 'eslint', 'templateanalyzer', 'terrascan', 'trivy'
+        tools: 'antimalware'
 
     # Upload alerts to the Security tab
     - name: Upload alerts to Security tab
