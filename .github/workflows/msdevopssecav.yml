@@ -2,6 +2,8 @@ name: MSDO windows-latest
 on:
   push:
     branches: [ main ]
+  schedule:
+    - cron: '30 14 * * 0'
 
 jobs:
   sample:
