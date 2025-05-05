@@ -44,8 +44,8 @@ jobs:
         sarif_file: ${{ steps.msdo.outputs.sarifFile }}
 
     # Upload alerts file as a workflow artifact
-    - name: Upload alerts file as a workflow artifact
-      uses: actions/upload-artifact@v3
-      with:  
-        name: alerts
-        path: ${{ steps.msdo.outputs.sarifFile }}
+    #- name: Upload alerts file as a workflow artifact
+    #  uses: actions/upload-artifact@v4
+    #  with:  
+    #    name: alerts
+    #    path: ${{ steps.msdo.outputs.sarifFile }}
