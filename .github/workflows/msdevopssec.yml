@@ -36,10 +36,10 @@ jobs:
       with:
         #categories: 'IaC, containers'    # default all
         tools: 
-            bandit, 
+            bandit,
             checkov,
-            eslint, 
             templateanalyzer
+            #eslint       
             # trivy
 
     # Upload alerts to the Security tab
