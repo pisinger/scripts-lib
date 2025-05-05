@@ -31,7 +31,6 @@ jobs:
       uses: microsoft/security-devops-action@preview
       id: msdo
       with:
-        # tools to use
         tools: 'bandit', 'checkov', 'eslint', 'templateanalyzer', 'terrascan', 'trivy'
 
     # Upload alerts to the Security tab
