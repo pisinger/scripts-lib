@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ig
+  labels:
+    k8s-app: example-ig
+spec:
+  selector:
+    matchLabels:
+      name: example-ig
+  template:
+    metadata:
+      labels:
+        name: example-ig
+    spec:
+      containers:
+      - name: ig-tcp
+        image: ghcr.io/inspektor-gadget/ig:latest
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "90m"
+          requests:
+            memory: "128Mi"
+            cpu: "30m"
+        securityContext:
+          privileged: true
+        command: ["ig", "run", "trace_tcp:latest","-o", "json"]  
+        env:
+        - name: HOST_ROOT
+          value: "/host"
+        volumeMounts:
+          - mountPath: /host
+            name: host
+          - mountPath: /sys/kernel/debug
+            name: debugfs
+          - mountPath: /run
+            name: run
+      - name: ig-dns
+        image: ghcr.io/inspektor-gadget/ig:latest
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "90m"
+          requests:
+            memory: "128Mi"
+            cpu: "30m"
+        securityContext:
+          privileged: true       
+        command: ["ig", "run", "trace_dns:latest","-o", "json"]
+        env:
+        - name: HOST_ROOT
+          value: "/host"
+        volumeMounts:
+          - mountPath: /host
+            name: host
+          - mountPath: /sys/kernel/debug
+            name: debugfs
+          - mountPath: /run
+            name: run
+      - name: ig-sni
+        image: ghcr.io/inspektor-gadget/ig:latest
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "90m"
+          requests:
+            memory: "128Mi"
+            cpu: "30m"
+        securityContext:
+          privileged: true
+        command: ["ig", "run", "trace_sni:latest","-o", "json"]
+        env:
+        - name: HOST_ROOT
+          value: "/host"
+        volumeMounts:
+          - mountPath: /host
+            name: host
+          - mountPath: /sys/kernel/debug
+            name: debugfs
+          - mountPath: /run
+            name: run
+      - name: ig-seccomp
+        image: ghcr.io/inspektor-gadget/ig:latest
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "90m"
+          requests:
+            memory: "128Mi"
+            cpu: "30m"
+        securityContext:
+          privileged: true
+        command: ["ig", "run", "audit_seccomp:latest","-o", "json"]
+        env:
+        - name: HOST_ROOT
+          value: "/host"
+        volumeMounts:
+          - mountPath: /host
+            name: host
+          - mountPath: /sys/kernel/debug
+            name: debugfs
+          - mountPath: /run
+            name: run
+      volumes:
+        - name: host
+          hostPath:
+            path: /
+        - name: debugfs
+          hostPath:
+            path: /sys/kernel/debug
+        - name: run
+          hostPath:
+            path: /run
