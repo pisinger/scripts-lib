@@ -1,3 +1,7 @@
+# source = https://github.com/pisinger/hunting
+# queries are based on https://pisinger.github.io/posts/edge-container-observability-using-inspektor-gadget
+# this blog is about a PoC to ingest observability data and signals from arc enabled cluster into Aure Monitor and Sentinel using IG and its eBPF gadgets
+# https://inspektor-gadget.io/
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
