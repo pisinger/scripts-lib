@@ -1,0 +1,540 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "minLength": 1,
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Not used, but needed to pass the arm-ttk test, 'Location-Should-Not-Be-Hardcoded'. Instead the `workspaceLocation` derived from the log analytics workspace is used."
+            }
+        },
+        "workspaceLocation": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "[concat('Region to deploy solution resources -- separate from location selection',parameters('location'))]"
+            }
+        },
+        "subscriptionId": {
+            "defaultValue": "[last(split(subscription().id, '/'))]",
+            "type": "string",
+            "metadata": {
+                "description": "subscription id where Microsoft Sentinel is configured"
+            }
+        },
+        "resourceGroupName": {
+            "defaultValue": "[resourceGroup().name]",
+            "type": "string",
+            "metadata": {
+                "description": "resource group name where Microsoft Sentinel is configured"
+            }
+        },
+        "workspaceName": {
+            "defaultValue": "",
+            "type": "string",
+            "metadata": {
+                "description": "the log analytics workspace enabled for Microsoft Sentinel"
+            }
+        }
+    },
+    // Next is the variables section here - adjust all with underscore _ to your needs
+    "variables": {
+        "workspaceResourceId": "[resourceId('microsoft.OperationalInsights/Workspaces', parameters('workspaceName'))]",
+        "_apiEndpoint": "https://sample-api.contoso.com/api", // Enter your API endpoint here
+        "_dcrNameSuffix": "CCF-MyDCR-V1", // Enter your DCR name
+        "_solutionName": "CCF My Sample Solution 2", // Enter your solution name 
+        "_solutionVersion": "3.0.0", // must be 3.0.0 or above
+        "_solutionAuthor": "CONTOSO", // Enter the name of the author
+        //"_packageIcon": "<img src=\"{LogoLink}\" width=\"75px\" height=\"75px\">", // Enter the http link for the logo. NOTE: This field is only recommended for Azure Global Cloud.
+        "_solutionId": "azuresentinel.azure-sentinel-solution-azuresentinel.azure-sentinel-MyCCFSampleSolution2", // Enter a name for your solution with this format but exchange the 'MySolution' portion
+        "dataConnectorVersionConnectorDefinition": "1.0.0",
+        "dataConnectorVersionConnections": "1.0.0",
+        "_solutionTier": "Community", // This designates the appropriate support - all custom data connectors are "Community"
+        "_dataconnectorDefinitionName": "CCFMySolutionTemplateConnectorDefinition", // Enter a name for the connector definition
+        "dataConnectorTemplateNameConnectorDefinition": "[concat(parameters('workspaceName'),'-dc-',uniquestring(variables('_dataconnectorDefinitionName')))]",
+        "_dataConnectorContentIdConnections": "CCFMySolutionTemplateConnections", // Enter a name for the connections this connector makes
+        "dataConnectorTemplateNameConnections": "[concat(parameters('workspaceName'),'-dc-',uniquestring(variables('_dataConnectorContentIdConnections')))]",
+        "_logAnalyticsTableId1": "CCFSampleConnector_CL"   // Enter the custom table name - not needed if you are ingesting data into standard tables
+        //"_logAnalyticsTableId2": "CCFSampleConnector2_CL"   // Enter more table names if needed
+		// Enter more variables as needed "":""
+    },
+    // Next is the resources sections here
+        "resources": [
+        // resource section 1 - contentTemplates
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnectorDefinition'), variables('dataConnectorVersionConnectorDefinition'))]",
+            "location": "[parameters('workspaceLocation')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataconnectorDefinitionName')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnectorDefinition'))]",
+                "contentKind": "DataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnectorDefinition')]",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataconnectorDefinitionName')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataconnectorDefinitionName'))]",
+                                "contentId": "[variables('_dataconnectorDefinitionName')]",
+                                "kind": "DataConnector",
+                                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                },
+                                "dependencies": {
+                                    "criteria": [
+                                        {
+                                            "version": "[variables('dataConnectorVersionConnections')]",
+                                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                            "kind": "ResourcesDataConnector"
+                                        }
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            "name": "[variables('_dcrNameSuffix')]",
+                            "apiVersion": "2021-09-01-preview",
+                            "type": "Microsoft.Insights/dataCollectionRules",
+                            "location": "[parameters('workspaceLocation')]",
+                            "kind": null,
+                            "properties": {
+                                "dataCollectionEndpointId": "[concat('/subscriptions/',parameters('subscriptionId'),'/resourceGroups/',parameters('resourceGroupName'),'/providers/Microsoft.Insights/dataCollectionEndpoints/',parameters('workspaceName'))]",
+                                "streamDeclarations": {
+                                "Custom-ExampleConnectorInput": {
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "datetime"
+                                        },
+                                        {
+                                            "name": "Timestamp",
+                                            "type": "datetime"
+                                        },
+                                        {
+                                            "name": "SourceIp",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "DestIp",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "Protocol",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "ClientName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "Region",
+                                            "type": "string"
+                                        }
+                                    ]
+                                }
+                                },
+                                "destinations": {
+                                    "logAnalytics": [
+                                        {
+                                        "workspaceResourceId": "[variables('workspaceResourceId')]",
+                                        "name": "mySentinelWorkspace"
+                                        }
+                                    ]
+                                },
+                                "dataFlows": [
+                                {
+                                    "streams": [
+                                    "Custom-ExampleConnectorInput"
+                                    ],
+                                    "destinations": [
+                                        "mySentinelWorkspace"
+                                    ],
+                                    //"transformKql": "source | where eventType == \"Alert\" | project TimeGenerated = ts, SourceIP = srcIp, DestIP = destIp, Message = message, Priority = priority \n",
+                                    "outputStream": "[concat('Custom-', variables('_logAnalyticsTableId1'))]"
+                                }
+                                ]
+                            }
+                        },
+                        {
+                            "name": "[variables('_logAnalyticsTableId1')]",
+                            "apiVersion": "2022-10-01",
+                            "type": "Microsoft.OperationalInsights/workspaces/tables",
+                            "location": "[parameters('workspaceLocation')]",
+                            "kind": null,
+                            "properties": {
+                                "schema": {
+                                    "name": "[variables('_logAnalyticsTableId1')]",
+                                    "columns": [
+                                        {
+                                            "name": "TimeGenerated",
+                                            "type": "datetime"
+                                        },
+                                        {
+                                            "name": "Timestamp",
+                                            "type": "datetime"
+                                        },
+                                        {
+                                            "name": "SourceIp",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "DestIp",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "Protocol",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "Ports",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "ClientName",
+                                            "type": "string"
+                                        },
+                                        {
+                                            "name": "Region",
+                                            "type": "string"
+                                        }
+                                    ]
+                                }
+                            }	
+                        }
+						// Enter more tables if needed.
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','dc','-', uniqueString(concat(variables('_solutionId'),'-','DataConnector','-',variables('_dataconnectorDefinitionName'),'-', variables('dataConnectorVersionConnectorDefinition'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        // resource 2 section here
+        // resource section 2 - dataConnectorDefinitions
+        {
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',variables('_dataconnectorDefinitionName'))]",
+            "apiVersion": "2022-09-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectorDefinitions",
+            "location": "[parameters('workspaceLocation')]",
+            "kind": "Customizable",
+            "properties": {
+                "connectorUiConfig": {
+                "title": "CCF Data Connector - My API",
+                "publisher": "[variables('_solutionAuthor')]",
+                "descriptionMarkdown": "This is an example of data connector",
+                "graphQueriesTableName": "CCFSampleConnector2_CL",
+                "graphQueries": [
+                    {
+                    "metricName": "Alerts received",
+                    "legend": "My data connector alerts",
+                    "baseQuery": "{{graphQueriesTableName}}"
+                    }
+                ],
+                    "sampleQueries": [
+                    {
+                        "description": "All alert logs",
+                        "query": "{{graphQueriesTableName}} \n | take 10"
+                    }
+                ],
+                "dataTypes": [
+                    {
+                    "name": "{{graphQueriesTableName}}",
+                    "lastDataReceivedQuery": "{{graphQueriesTableName}} \n | summarize Time = max(TimeGenerated)\n | where isnotempty(Time)"
+                    }
+                ],
+                "connectivityCriteria": [
+                    {
+                    "type": "HasDataConnectors"
+                    }
+                ],
+                "permissions": {
+                    "resourceProvider": [
+                    {
+                        "provider": "Microsoft.OperationalInsights/workspaces",
+                        "permissionsDisplayText": "Read and Write permissions are required.",
+                        "providerDisplayName": "Workspace",
+                        "scope": "Workspace",
+                        "requiredPermissions": {
+                        "write": true,
+                        "read": true,
+                        "delete": true
+                        }
+                    }
+                    ],
+                    "customs": [
+                    {
+                        "name": "Example Connector API Key",
+                        "description": "The connector API key is required"
+                    }
+                    ] 
+                },
+                "instructionSteps": [
+                    {
+                    "title": "Connect My Connector to Microsoft Sentinel",
+                    "description": "To enable the connector provide the required information below and click on Connect",
+                    "instructions": [
+                        {
+                            "type": "Textbox",
+                            "parameters": {
+                                "label": "ApiKey",
+                                "placeholder": "ApiKey",
+                                "type": "ApiKey",
+                                "name": "ApiKey"
+                            }
+                        },
+                        {
+                            "type": "ConnectionToggleButton",
+                            "parameters": {
+                                "connectLabel": "toggle",
+                                "name": "toggle"
+                            }
+                        }
+                    ]
+                    }
+                ]
+                }
+            }
+        },
+        // resource 3 section here
+        // resource section 3 - metadata
+        {
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataconnectorDefinitionName')))]",
+            "apiVersion": "2022-01-01-preview",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+            "properties": {
+                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/dataConnectorDefinitions', variables('_dataconnectorDefinitionName'))]",
+                "contentId": "[variables('_dataconnectorDefinitionName')]",
+                "kind": "DataConnector",
+                "version": "[variables('dataConnectorVersionConnectorDefinition')]",
+                "source": {
+                    "sourceId": "[variables('_solutionId')]",
+                    "name": "[variables('_solutionName')]",
+                    "kind": "Solution"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]",
+                    "tier": "[variables('_solutionTier')]"
+                },
+                "dependencies": {
+                    "criteria": [
+                        {
+                            "version": "[variables('dataConnectorVersionConnections')]",
+                            "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                            "kind": "ResourcesDataConnector"
+                        }
+                    ]
+                }
+            }
+        },
+        // resource 4 section here
+        // resource section 4 - contentTemplates
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentTemplates",
+            "apiVersion": "2023-04-01-preview",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('dataConnectorTemplateNameConnections'), variables('dataConnectorVersionConnections'))]",
+            "location": "[parameters('workspaceLocation')]",
+            "dependsOn": [
+                "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/contentPackages', variables('_solutionId'))]"
+            ],
+            "properties": {
+                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                "displayName": "[concat(variables('_solutionName'), variables('dataConnectorTemplateNameConnections'))]",
+                "contentKind": "ResourcesDataConnector",
+                "mainTemplate": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "[variables('dataConnectorVersionConnections')]",
+                    "parameters":
+                    // These parameters are used by the data connector primarily as properties for the administrator to enter in the UI when configuring the connector
+					{
+                        "connectorDefinitionName": {
+                            "defaultValue": "[variables('_dataconnectorDefinitionName')]",
+                            "type": "string",
+                            "minLength": 1
+                        },
+                        "workspace": {
+                            "defaultValue": "[parameters('workspaceName')]",
+                            "type": "string"
+                        },
+                        "dcrConfig": {
+                            "defaultValue": {
+                                "dataCollectionEndpoint": "data collection endpoint name",
+                                "dataCollectionRuleImmutableId": "data collection rule immutableId"
+                            },
+                            "type": "object"
+                        },
+						// Enter additional parameters, for example:
+						//"domainname": {
+                        //    "defaultValue": "domain name",
+                        //    "type": "string",
+                        //    "minLength": 1
+                        //},
+                        "apikey": {
+                            "defaultValue": "",
+                            "type": "securestring",
+                            "minLength": 1
+                        }
+                    },
+                    "variables": {
+                        "_dataConnectorContentIdConnections": "[variables('_dataConnectorContentIdConnections')]"
+                    },
+                    "resources": [
+                        {
+                            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/',concat('DataConnector-', variables('_dataConnectorContentIdConnections')))]",
+                            "apiVersion": "2022-01-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/metadata",
+                            "properties": {
+                                "parentId": "[extensionResourceId(resourceId('Microsoft.OperationalInsights/workspaces', parameters('workspaceName')), 'Microsoft.SecurityInsights/dataConnectors', variables('_dataConnectorContentIdConnections'))]",
+                                "contentId": "[variables('_dataConnectorContentIdConnections')]",
+                                "kind": "ResourcesDataConnector",
+                                "version": "[variables('dataConnectorVersionConnections')]",
+                                "source": {
+                                    "sourceId": "[variables('_solutionId')]",
+                                    "name": "[variables('_solutionName')]",
+                                    "kind": "Solution"
+                                },
+                                "author": {
+                                    "name": "[variables('_solutionAuthor')]"
+                                },
+                                "support": {
+                                    "name": "[variables('_solutionAuthor')]",
+                                    "tier": "[variables('_solutionTier')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', 'MyDataConnector')]", // Replace the last part of the name with your data connector name
+                            //  To create several connections using this template, make the name dynamic. For example, use the 'concat' function to add the connector name with a GUID using the 'guid' function.
+                            "apiVersion": "2022-12-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces/providers/dataConnectors",
+                            "location": "[parameters('workspaceLocation')]",
+                            "kind": "RestApiPoller",
+                            "properties": {
+                                "connectorDefinitionName": "[variables('_dataconnectorDefinitionName')]",
+                                "dcrConfig": {
+                                    "streamName": "Custom-ExampleConnectorInput",
+                                    "dataCollectionEndpoint": "[[parameters('dcrConfig').dataCollectionEndpoint]",
+                                    "dataCollectionRuleImmutableId": "[[parameters('dcrConfig').dataCollectionRuleImmutableId]"
+                                },
+                                "dataType": "ExampleLogs",
+                                "auth": {
+                                    "type": "APIKey",
+                                    "ApiKey": "[[parameters('apikey')]",
+                                    "ApiKeyName": "x-api-key",
+                                    "ApiKeyIdentifier": ""     //x-api-key: Bearer apikey
+                                },
+                                "request": {
+                                    "apiEndpoint": "[variables('_apiEndpoint')]",
+                                    "rateLimitQPS": 10,
+                                    "queryWindowInMin": 5,                                    
+                                    "httpMethod": "GET",
+                                    //"queryTimeFormat": "UnixTimestamp",
+                                    //"queryTimeFormat": "yyyy-MM-ddTHH:mm:ssZ",
+                                    //"startTimeAttributeName": "t0",
+                                    //"endTimeAttributeName": "t1",
+                                    "retryCount": 3,
+                                    "timeoutInSeconds": 60,
+                                    "headers": {
+                                        "Accept": "application/json",
+                                        "User-Agent": "my-sentinel-api-poller"
+                                    }
+                                    //"queryParameters": {
+                                    //    "filter": "receivedDateTime gt {_QueryWindowStartTime} and receivedDateTime lt {_QueryWindowEndTime}"
+                                    //}
+                                },
+                                "paging": {
+                                    "pagingType": "LinkHeader"
+                                },
+                                "response": {
+                                    "eventsJsonPaths": ["$"]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "packageKind": "Solution",
+                "packageVersion": "[variables('_solutionVersion')]",
+                "packageName": "[variables('_solutionName')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','rdc','-', uniqueString(concat(variables('_solutionId'),'-','ResourcesDataConnector','-',variables('_dataConnectorContentIdConnections'),'-', variables('dataConnectorVersionConnections'))))]",
+                "packageId": "[variables('_solutionId')]",
+                "contentSchemaVersion": "3.0.0",
+                "version": "[variables('_solutionVersion')]"
+            }
+        },
+        // resource 5 section here
+        // resource section 5 - contentPackages
+        {
+            "type": "Microsoft.OperationalInsights/workspaces/providers/contentPackages",
+            "name": "[concat(parameters('workspaceName'),'/Microsoft.SecurityInsights/', variables('_solutionId'))]",
+            "location": "[parameters('workspaceLocation')]",
+            "apiVersion": "2023-04-01-preview",
+            "properties": {
+                "version": "[variables('_solutionVersion')]",
+                "kind": "Solution",
+                "contentSchemaVersion": "3.0.0",
+                "contentId": "[variables('_solutionId')]",
+                "source": {
+                    "kind": "Solution",
+                    "name": "[variables('_solutionName')]",
+                    "sourceId": "[variables('_solutionId')]"
+                },
+                "author": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "support": {
+                    "name": "[variables('_solutionAuthor')]"
+                },
+                "dependencies": {
+                    "operator": "AND",
+                    "criteria": [
+                        {
+                            "kind": "DataConnector",
+                            "contentId": "[variables('dataConnectorVersionConnectorDefinition')]",
+                            "version": "[variables('_dataconnectorDefinitionName')]"
+                        }
+                    ]
+                },
+                "firstPublishDate": "2023-12-05",
+                "providers": [
+                    "[variables('_solutionAuthor')]"
+                ],
+                "contentKind": "Solution",
+                "packageId": "[variables('_solutionId')]",
+                "contentProductId": "[concat(substring(variables('_solutionId'), 0, 50),'-','sl','-', uniqueString(concat(variables('_solutionId'),'-','Solution','-',variables('_solutionId'),'-', variables('_solutionVersion'))))]",
+                "displayName": "[variables('_solutionName')]",
+                "publisherDisplayName": "[variables('_solutionId')]",
+                "descriptionHtml": "test"
+                //"icon": "[variables('_packageIcon')]"
+            }
+        }
+        // that's the end!
+    ]
+}
