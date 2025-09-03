@@ -1,5 +1,3 @@
-# author: https://github.com/pisinger/scripts-lib/powershell
-# blog: https://pisinger.github.io/posts/ingestion-into-sentinel-via-event-hub-made-simple
 
 # required modules:
 # Install-Module Az.EventHub -AllowClobber -Force -Scope CurrentUser
@@ -15,34 +13,82 @@
 
 #-------------------------------------------------------------
 # variables
-$location = "germanywestcentral"
+param(
+	$location = "germanywestcentral",
+	
+	[Parameter(Mandatory=$True)]
+	$workspaceId,
+	
+	[Parameter(Mandatory=$True)]
+	$dce_id,
+	
+	[Parameter(Mandatory=$True)]
+	$eventHubNamespaceId,
 
-$workspaceId = "/subscriptions/xxxxxxx/resourcegroups/xxxxxxx/providers/microsoft.operationalinsights/workspaces/xxxxxxx"
-$dce_id = "/subscriptions/xxxxxxx/resourceGroups/xxxxxxx/providers/Microsoft.Insights/dataCollectionEndpoints/xxxxxxx"
+    $resourceSuffix = "team123"
+)
 
-$eventHubNamespaceId = "/subscriptions/xxxxxxx/resourceGroups/xxxxxxx/providers/Microsoft.EventHub/namespaces/xxxxxxx"
 $eventHubNamespaceName = $eventHubNamespaceId.Split("/")[-1]
-
-$workspaceName = $workspaceId.Split("/")[-1]
+#$workspaceName = $workspaceId.Split("/")[-1]
 $resourceGroup = $workspaceId.Split("/")[-5]
 $resourceGroupId = ($workspaceId.Split("/providers",2))[0]
 
 #-----------------------------------------------------------
-# map of data sources to create event hubs and corresponding tables in workspace
+# map of data sources to create event hubs and corresponding tables in workspace including DCR
 
-$dataMap = @(
-    @{source="DataSource1"; partitions=10; totalRetentionInDays=30; plan="Analytics"},
-    @{source="DataSource2"; partitions=10; totalRetentionInDays=30; plan="Basic"},
-    @{source="DataSource3"; partitions=10; totalRetentionInDays=30; plan="Auxiliary"},
-    @{source="DefenderStreamingApi"; partitions=4; totalRetentionInDays=30; plan="Auxiliary"}
-)
+$dataMap = @{
+    "NetworkLogs" = @{
+        name = "NetworkLogs";
+        partitions = 20;
+        plan = "Auxiliary";
+        totalRetentionInDays = 30;
+        columns = @(
+            @{ name = "TimeGenerated"; type = "datetime"; description = "The time at which the data was ingested." },
+            @{ name = "RawData"; type = "string"; description = "Body of the event." },
+            @{ name = "Column1"; type = "string"; description = "Custom column 1." }
+        )
+    };
+    "SecurityEvents" = @{
+        name = "SecurityEvents";
+        partitions = 20;
+        plan = "Auxiliary";
+        totalRetentionInDays = 30;
+        columns = @(
+            @{ name = "TimeGenerated"; type = "datetime"; description = "The time at which the data was ingested." },
+            @{ name = "RawData"; type = "string"; description = "Body of the event." },
+            @{ name = "ColumnA"; type = "int"; description = "Custom column A." },
+            @{ name = "ColumnB"; type = "string"; description = "Custom column B." }
+        )
+    };
+    "ProxyLogs" = @{
+        name = "ProxyLogs";
+        partitions = 20;
+        plan = "Auxiliary";
+        totalRetentionInDays = 30;
+        columns = @(
+            @{ name = "TimeGenerated"; type = "datetime"; description = "The time at which the data was ingested." },
+            @{ name = "RawData"; type = "string"; description = "Body of the event." },
+            @{ name = "ColumnA"; type = "int"; description = "Custom column A." },
+            @{ name = "ColumnB"; type = "string"; description = "Custom column B." }
+        )
+    }
+}
 
 #-----------------------------------------------------------
 # 1 - create event hubs in existing namespace
 # Install-Module az.eventhub
 
-foreach ($item in $dataMap) {
-	New-AzEventHub -ResourceGroupName $resourceGroup -NamespaceName $eventHubNamespaceName -Name $item.source -RetentionTimeInHour 72 -PartitionCount $item.partitions -CleanupPolicy Delete
+foreach ($table in $dataMap.keys) {
+    $item = $datamap[$table]
+
+    IF (-not$(Get-AzEventHub -ResourceGroupName $resourceGroup -NamespaceName $eventHubNamespaceName -Name $item.name -ErrorAction SilentlyContinue) ) {
+        Write-Host "Creating event hub: " $item.name -ForegroundColor Cyan
+        New-AzEventHub -ResourceGroupName $resourceGroup -NamespaceName $eventHubNamespaceName -Name $item.name -RetentionTimeInHour 72 -PartitionCount $item.partitions -CleanupPolicy Delete
+    } 
+    ELSE {
+        Write-Host "Event hub already exists:" $item.name -ForegroundColor Green
+        continue
+    }
 }
 
 #-------------------------------------------------------------
@@ -50,37 +96,55 @@ foreach ($item in $dataMap) {
 # depending on your transformations you may want to adjust the table schema, can also be done afterwards
 # reserved column names: id, _ResourceId, _SubscriptionId, TenantId, Type, UniqueId, Title
 
-$tableParams = @'
-{
-    "properties": {
-		"plan": "var_plan",
-		"totalRetentionInDays": var_retention,
-        "schema": {
-            "name": "var_tableName",
-            "columns": [
-                {
-                    "name": "TimeGenerated",
-                    "type": "datetime",
-                    "description": "The time at which the data was ingested."
-                },
-                {
-                    "name": "RawData",
-                    "type": "string",
-                    "description": "Body of the event."
-                }
-            ]
+foreach ($table in $dataMap.keys) {
+    $item = $datamap[$table]
+
+    # create dynamic schema per table
+    $columnsJson = $item.columns | ForEach-Object {
+        @{
+            name = $_.name;
+            type = $_.type;
+            description = $_.description
         }
     }
-}
-'@
 
-foreach ($item in $dataMap) {
-	
-	$table = $tableParams -replace "var_tableName", $($item.source + "_CL")
-	$table = $table -replace "var_retention", $item.totalRetentionInDays
-	$table = $table -replace "var_plan", $item.plan
+    $tableParams = @{
+        properties = @{
+            plan = $item.plan;
+            totalRetentionInDays = $item.retention;
+            schema = @{
+                name = $($item.name + "_CL");
+                columns = $columnsJson
+            }
+        }
+    }
 
-    Invoke-AzRestMethod -Path $($workspaceId + "/tables/" + $item.source + "_CL" + "?api-version=2023-01-01-preview") -Method PUT -payload $table
+    $jsonPayload = $tableParams | ConvertTo-Json -Depth 5    
+
+    Try {
+        $tableExists = Invoke-AzRestMethod -Path $($workspaceId + "/tables/" + $item.name + "_CL" + "?api-version=2023-01-01-preview") -Method "GET" -ErrorAction Stop
+
+        IF( $tableExists.StatusCode -like "2*" ) {
+            Write-Host $("Update existing workspace table: " + $item.name) -ForegroundColor Magenta -NoNewline
+            $response = Invoke-AzRestMethod -Path $($workspaceId + "/tables/" + $item.name + "_CL" + "?api-version=2023-01-01-preview") -Method "PATCH" -payload $jsonPayload -ErrorAction Stop
+            
+        }
+        ELSE {
+             Write-Host $("Creating new workspace table: " + $item.name) -ForegroundColor Cyan -NoNewline
+            $response = Invoke-AzRestMethod -Path $($workspaceId + "/tables/" + $item.name + "_CL" + "?api-version=2023-01-01-preview") -Method "PUT" -payload $jsonPayload -ErrorAction Stop
+        }
+
+        IF ($response.StatusCode -like "2*") {
+            Write-Host $(" -> " + $response.StatusCode) -ForegroundColor Green
+        }
+        ELSE {
+            Write-Host $(" -> " + $response.StatusCode) -ForegroundColor Red
+            Write-Error $($response.Content)
+        }
+    }
+    catch {
+        Write-Error $_.Exception.Message
+    }
 }
 
 #-------------------------------------------------------------
@@ -91,53 +155,17 @@ foreach ($item in $dataMap) {
 
 # NOTE: The stream must named as Custom-MyEventHubStream
 
-$dcrParams = @'
+$dcrTemplate = @'
 {
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "dataCollectionRuleName": {
-            "type": "string",
-            "metadata": {
-                "description": "Specifies the name of the data collection Rule to create."
-            },
-            "defaultValue": "var_dataCollectionRuleName"
-        },
-        "workspaceResourceId": {
-            "type": "string",
-            "metadata": {
-                "description": "Specifies the Azure resource ID of the Log Analytics workspace to use."
-            },
-            "defaultValue": "var_workspaceId"
-        },
-        "endpointResourceId": {
-            "type": "string",
-            "metadata": {
-                "description": "Specifies the Azure resource ID of the data collection endpoint to use."
-            },
-            "defaultValue": "var_endpointResourceId"
-        },
-        "tableName": {
-            "type": "string",
-            "metadata": {
-                "description": "Specifies the name of the table in the workspace."
-            },
-            "defaultValue": "var_tableName"
-        },
-        "consumerGroup": {
-            "type": "string",
-            "metadata": {
-                "description": "Specifies the consumer group of event hub."
-            },
-            "defaultValue": "$Default"
-        },
-        "location": {
-            "type": "string",
-            "metadata": {
-                "description": "Specifies the location of the data collection rule."
-            },
-            "defaultValue": "var_location"
-        }
+        "dataCollectionRuleName": { "type": "string", "defaultValue": "var_dataCollectionRuleName" },
+        "workspaceResourceId": { "type": "string", "defaultValue": "var_workspaceId" },
+        "endpointResourceId": { "type": "string", "defaultValue": "var_endpointResourceId" },
+        "tableName": { "type": "string", "defaultValue": "var_tableName" },
+        "consumerGroup": { "type": "string", "defaultValue": "$Default" },
+        "location": { "type": "string", "defaultValue": "var_location" }
     },
     "resources": [
         {
@@ -145,29 +173,10 @@ $dcrParams = @'
             "name": "[parameters('dataCollectionRuleName')]",
             "location": "[parameters('location')]",
             "apiVersion": "2022-06-01",
-            "identity": {
-                "type": "systemAssigned"
-            },
+            "identity": { "type": "systemAssigned" },
             "properties": {
                 "dataCollectionEndpointId": "[parameters('endpointResourceId')]",
-                "streamDeclarations": {
-                    "Custom-MyEventHubStream": {
-                        "columns": [
-                            {
-                                "name": "TimeGenerated",
-                                "type": "datetime"
-                            },
-                            {
-                                "name": "RawData",
-                                "type": "string"
-                            },
-                            {
-                                "name": "Properties",
-                                "type": "dynamic"
-                            }
-                        ]
-                    }
-                },
+                "streamDeclarations": {},
                 "dataSources": {
                     "dataImports": {
                         "eventHub": {
@@ -187,35 +196,9 @@ $dcrParams = @'
                 },
                 "dataFlows": [
                     {
-                        "streams": [
-                            "Custom-MyEventHubStream"
-                        ],
-                        "destinations": [
-                            "MyDestinationWorkspace"
-                        ],
+                        "streams": [ "Custom-MyEventHubStream" ],
+                        "destinations": [ "MyDestinationWorkspace" ],
                         "outputStream": "[concat('Custom-', parameters('tableName'))]"
-                    }
-                ]
-            }
-        },
-        {
-            "type": "Microsoft.Insights/diagnosticSettings",
-            "apiVersion": "2021-05-01-preview",
-            "scope": "[format('Microsoft.Insights/dataCollectionRules/{0}', parameters('dataCollectionRuleName'))]",
-            "name": "[format('dcr-diagnostics-{0}', parameters('dataCollectionRuleName'))]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Insights/dataCollectionRules', parameters('dataCollectionRuleName'))]"
-            ],
-            "properties": {
-                "workspaceId": "[parameters('workspaceResourceId')]",
-                "logs": [
-                    {
-                        "categoryGroup": "allLogs",
-                        "enabled": true,
-                        "retentionPolicy": {
-                            "enabled": false,
-                            "days": 0
-                        }
                     }
                 ]
             }
@@ -224,22 +207,80 @@ $dcrParams = @'
 }
 '@
 
-foreach ($item in $dataMap) {
-	
-    $dcrName = ("EVH-" + $($item.source + "_" + $workspaceName).ToLower())
-	
-	$dcrTemplate = $dcrParams -replace "var_tableName", $($item.source + "_CL")
-	$dcrTemplate = $dcrTemplate -replace "var_endpointResourceId", $dce_id
-    $dcrTemplate = $dcrTemplate -replace "var_workspaceId", $workspaceId
-    $dcrTemplate = $dcrTemplate -replace "var_location", $location
-    $dcrTemplate = $dcrTemplate -replace "var_dataCollectionRuleName", $dcrName
+foreach ($table in $dataMap.keys) {
+    $item = $datamap[$table]
 
-    $TemplateHashTable = $dcrTemplate | ConvertFrom-Json -AsHashtable
-    New-AzResourceGroupDeployment -ResourceGroupName $resourceGroup -TemplateObject $TemplateHashTable -DeploymentName $dcrName
+    # Build streamDeclarations columns
+    $columns = $item.columns | ForEach-Object {
+        @{
+            name = $_.name;
+            type = $_.type
+        }
+    }
+
+    $streamDeclarations = @{
+        "Custom-MyEventHubStream" = @{
+            columns = $columns
+        }
+    }
+
+    # Convert base template to object
+    $templateObject = $dcrTemplate | ConvertFrom-Json
+    $templateObject.resources[0].properties.streamDeclarations = $streamDeclarations
+
+    $dcrName = ("EVH-" + $($item.name + "_" + $resourceSuffix).ToLower())
+
+    $templateObject.parameters.dataCollectionRuleName.defaultValue = $dcrName
+    $templateObject.parameters.workspaceResourceId.defaultValue = $workspaceId
+    $templateObject.parameters.endpointResourceId.defaultValue = $dce_id
+    $templateObject.parameters.tableName.defaultValue = $item.name + "_CL"
+    $templateObject.parameters.location.defaultValue = $location
+
+    $TemplateHashTable = $templateObject | ConvertTo-Json -Depth 10 | ConvertFrom-Json -AsHashtable
+    
+    Try {
+        Write-Host $("Creating DCR for event hub: " + $item.name) -ForegroundColor Cyan -NoNewline
+        $deployment = New-AzResourceGroupDeployment -ResourceGroupName $resourceGroup -TemplateObject $TemplateHashTable -DeploymentName $dcrName -ErrorAction Stop
+
+        IF ($deployment.ProvisioningState -ne "Succeeded") {
+            Write-Error $("Creating DCR failed due to not expected ProvisioningState: " + $item.name)
+        }
+        ELSE {
+            Write-Host $(" -> " + $deployment.ProvisioningState) -ForegroundColor Green
+        }
+    }
+    Catch {
+        Write-Error $("Creating DCR failed for event hub " + $item.name)
+        Write-Error $_.Exception.Message
+    }
 }
 
 #-------------------------------------------------------------
-# 4 - Associate the data collection rule with the event hub (DCRA)
+# 4 - assign event hub receiver permission to DCR managed identity (role assignment)
+
+foreach ($table in $dataMap.keys) {
+    $item = $datamap[$table]
+	
+    $dcrName = ("EVH-" + $($item.name + "_" + $resourceSuffix).ToLower())
+	$EventHubId = $($eventHubNamespaceId + "/eventhubs/" + $item.name)
+
+	# Get the DCR managed identity
+	$dcr = Get-AzResource -ResourceGroupName $resourceGroup -ResourceType "Microsoft.Insights/dataCollectionRules" -ResourceName $dcrName
+	$principalId = $dcr.Identity.PrincipalId
+
+	# Assign the Event Hub Data Receiver role to the DCR managed identity
+	IF (-not($(Get-AzRoleAssignment -ObjectId $principalId -RoleDefinitionName "Azure Event Hubs Data Receiver" -Scope $EventHubId))) {
+        Write-Host "Assigning Event Hub Data Receiver role to DCR identity for event hub:" $item.name -ForegroundColor Cyan
+		New-AzRoleAssignment -ObjectId $principalId -RoleDefinitionName "Azure Event Hubs Data Receiver" -Scope $EventHubId
+	}
+    ELSE {
+        Write-Host "Role assignment already exists for event hub:" $item.name -ForegroundColor Green
+        continue
+    }
+}
+
+#-------------------------------------------------------------
+# 5 - Associate the data collection rule with the event hub (DCRA)
 
 $dcrAssociateParams = @'
 {
@@ -283,32 +324,42 @@ $dcrAssociateParams = @'
 }
 '@
 
-foreach ($item in $dataMap) {
+foreach ($table in $dataMap.keys) {
+    $item = $datamap[$table]
 	
-	$dcrName = ("EVH-" + $($item.source + "_" + $workspaceName).ToLower())
+	$dcrName = ("EVH-" + $($item.name + "_" + $resourceSuffix).ToLower())
     $dcrId = $($resourceGroupId + "/providers/Microsoft.Insights/dataCollectionRules/" + $dcrName)
-    $dcrAssocName = ("EVH-dcr-assoc-" + $item.source + "_" + $workspaceName).ToLower()
+    $dcrAssocName = ("EVH-dcr-assoc-" + $item.name + "_" + $resourceSuffix).ToLower()
 
-	$associateTemplate = $dcrAssociateParams -replace "var_EventHubResourceID", $($eventHubNamespaceId + "/eventhubs/" + $item.source)
+	$associateTemplate = $dcrAssociateParams -replace "var_EventHubResourceID", $($eventHubNamespaceId + "/eventhubs/" + $item.name)
     $associateTemplate = $associateTemplate -replace "var_dataCollectionRuleID", $dcrId
     $associateTemplate = $associateTemplate -replace "var_associationName", $dcrAssocName
 
     $TemplateHashTable = $associateTemplate | ConvertFrom-Json -AsHashtable
-    New-AzResourceGroupDeployment -ResourceGroupName $resourceGroup -TemplateObject $TemplateHashTable -DeploymentName $dcrAssocName
-}
 
-#-------------------------------------------------------------
-# 5 - assign event hub receiver permission to DCR managed identity (role assignment)
+    Try {
+        $existingAssoc = Invoke-AzRestMethod -Path $($eventHubNamespaceId + "/eventhubs/" + $item.name + "/providers/Microsoft.Insights/dataCollectionRuleAssociations/" + $dcrAssocName + "?api-version=2023-03-11") -Method GET
 
-foreach ($item in $dataMap) {
-	
-    $dcrName = ("EVH-" + $($item.source + "_" + $workspaceName).ToLower())
-	$EventHubId = $($eventHubNamespaceId + "/eventhubs/" + $item.source)
+        IF ( $existingAssoc.StatusCode -like "2*" ) {
+            Write-Host $("Associating DCR already done for event hub: " + $item.name) -ForegroundColor Green
+            continue
+        }
+        ELSE {
 
-	# Get the DCR managed identity
-	$dcr = Get-AzResource -ResourceGroupName $resourceGroup -ResourceType "Microsoft.Insights/dataCollectionRules" -ResourceName $dcrName
-	$principalId = $dcr.Identity.PrincipalId
-
-	# Assign the Event Hub Data Receiver role to the DCR managed identity
-	New-AzRoleAssignment -ObjectId $principalId -RoleDefinitionName "Azure Event Hubs Data Receiver" -Scope $EventHubId
+            Write-Host $("Associating DCR for event hub: " + $item.name) -ForegroundColor Cyan -NoNewline
+            $deployment = New-AzResourceGroupDeployment -ResourceGroupName $resourceGroup -TemplateObject $TemplateHashTable -DeploymentName $dcrAssocName -ErrorAction Stop
+            
+            IF ($deployment.ProvisioningState -ne "Succeeded") {
+                Write-Error $("Associating DCR failed due to not expected ProvisioningState: " + $item.name)
+            }
+            ELSE {
+                Write-Host $(" -> " + $deployment.ProvisioningState) -ForegroundColor Green
+                #$deployment
+            }
+        }
+    }
+    Catch {
+        Write-Error $("Associating DCR failed for " + $item.name)
+        Write-Error $_.Exception.Message
+    }    
 }
