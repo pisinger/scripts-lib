@@ -7,7 +7,14 @@ New-Item -ItemType Directory -Name "DefenderSettings" -Path $Path -ErrorAction S
 $DestinationPath = $($Path + "DefenderSettings\")
 
 Get-MpComputerStatus | out-file $($DestinationPath + "MpComputerStatus.txt")
-Get-MpPreference | out-file $($DestinationPath + "MpPreference.txt")
+	
+$prefs = Get-MpPreference
+$prefs | out-file $($DestinationPath + "MpPreference.txt")
+	
+$prefs.ExclusionProcess | out-file $($DestinationPath + "MpExclusions.txt"); "" | out-file $($DestinationPath + "MpExclusions.txt") -Append
+$prefs.ExclusionPath | out-file $($DestinationPath + "MpExclusions.txt") -Append; "" | out-file $($DestinationPath + "MpExclusions.txt") -Append
+$prefs.ExclusionIpAddress | out-file $($DestinationPath + "MpExclusions.txt") -Append; "" | out-file $($DestinationPath + "MpExclusions.txt") -Append
+$prefs.ExclusionExtension | out-file $($DestinationPath + "MpExclusions.txt") -Append
 
 Get-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" | out-file $($DestinationPath + "DefenderAvReg.txt")
 Get-Service -Name Sense, WinDefend, MdCoreSvc, WdNisSvc, wscsvc, MDDlpSvc -EA SilentlyContinue | out-file $($DestinationPath + "Services.txt")
