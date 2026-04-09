@@ -4,6 +4,7 @@ on:
     branches: [ main ]
   schedule:
     - cron: '30 17 * * 0'
+  workflow_dispatch:
 
 env:
   #eslint_targets: '**/*.js'
