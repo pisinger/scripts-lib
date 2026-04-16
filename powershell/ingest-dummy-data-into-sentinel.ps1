@@ -67,8 +67,12 @@ param(
     
     [string]$Location = "germanywestcentral",
     [string]$SubscriptionId,
+	
     [int]$RecordsPerVendor = 15,
-    [switch]$SkipInfraSetup
+    [switch]$SkipInfraSetup,
+	
+	[string]$DceName = "dce-fake-security-logs",
+	[string]$DcrName = "dcr-fake-security-vendors"
 )
 
 Set-StrictMode -Version Latest
@@ -353,11 +357,10 @@ function Invoke-ArmApi {
 # 4.  Infrastructure setup
 # ============================================================
 
-$DceName    = "dce-security-logs"
-$DcrName    = "dcr-security-vendors"
 # Vendor short names — tables will be "Sample<Vendor>_CL", streams "Custom-Sample<Vendor>_CL"
 $TableBase  = @("FwVendor2","EndpointVendor1","EndpointVendor2","FwVendor1","Kubernetes")
 $TablePrefix = "Sample"
+
 # DCR schema — 4 columns matching the provided template (all vendor detail in RawData)
 $DcrColumns = @(
     @{ name="TimeGenerated"; type="datetime" }
