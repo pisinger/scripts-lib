@@ -1,7 +1,10 @@
+# https://learn.microsoft.com/en-us/azure/azure-monitor/logs/ingest-logs-event-hub
 
 # required modules:
 # Install-Module Az.EventHub -AllowClobber -Force -Scope CurrentUser
 # Install-Module Az.Resources -AllowClobber -Force -Scope CurrentUser
+
+# NOTE: Event Hub data imports are only available with 'LACluster' and 'CapacityReservation' SKUs of Log Analytics workspace
 
 #-------------------------------------------------------------
 # steps overview
@@ -14,31 +17,63 @@
 #-------------------------------------------------------------
 # variables
 param(
-	$location = "germanywestcentral",
+	# needs to match DCE location
+	$location = "westeurope",
 	
-	[Parameter(Mandatory=$True)]
-	$workspaceId,
+	#[Parameter(Mandatory=$True)]
+	$workspaceId = "/subscriptions/<sub_id>/resourcegroups/<resource_group>/providers/microsoft.operationalinsights/workspaces/<workspace_name>",
 	
-	[Parameter(Mandatory=$True)]
-	$dce_id,
+	#[Parameter(Mandatory=$True)]
+	$dce_id = "/subscriptions/<sub_id>/resourceGroups/<resource_group>/providers/Microsoft.Insights/dataCollectionEndpoints/<data_collection_endpoint_name>",
 	
-	[Parameter(Mandatory=$True)]
-	$eventHubNamespaceId,
+	#[Parameter(Mandatory=$True)]
+	$eventHubNamespaceId = "/subscriptions/<sub_id>/resourceGroups/<resource_group>/providers/Microsoft.EventHub/namespaces/<event_hub_namespace>",
 
-    $resourceSuffix = "team123"
+    $resourceSuffix = ""
 )
+
+$ErrorActionPreference = 'Stop'
 
 $eventHubNamespaceName = $eventHubNamespaceId.Split("/")[-1]
 #$workspaceName = $workspaceId.Split("/")[-1]
 $resourceGroup = $workspaceId.Split("/")[-5]
 $resourceGroupId = ($workspaceId.Split("/providers",2))[0]
+$resourceGroupEventHub = $eventHubNamespaceId.Split("/")[-5]
 
 #-----------------------------------------------------------
 # map of data sources to create event hubs and corresponding tables in workspace including DCR
 
 $dataMap = @{
-    "NetworkLogs" = @{
-        name = "NetworkLogs";
+    "CloudProcessEvents" = @{
+        name = "CloudProcessEvents";
+		# use this eh name so we can simply re-use the auto created event hubs from xdr
+		eh_name = "insights-logs-advancedhunting-cloudprocessevents"
+        partitions = 10;
+        plan = "Auxiliary";
+        totalRetentionInDays = 180;
+        columns = @(
+            @{ name = "TimeGenerated"; type = "datetime"; description = "The time at which the data was ingested." },
+            @{ name = "RawData"; type = "string"; description = "Body of the event." }
+        )
+    }
+}
+
+$dataMap_bak = @{
+	# not supported yet by defender streaming api
+    "CloudDnsEvents" = @{
+        name = "CloudDnsEvents";
+		eh_name = "insights-logs-advancedhunting-clouddnsevents"
+        partitions = 10;
+        plan = "Auxiliary";
+        totalRetentionInDays = 180;
+        columns = @(
+            @{ name = "TimeGenerated"; type = "datetime"; description = "The time at which the data was ingested." },
+            @{ name = "RawData"; type = "string"; description = "Body of the event." }
+        )
+    };
+    "FirewallVendor1" = @{
+        name = "FirewallVendor1";
+		eh_name = "FirewallVendor1";
         partitions = 20;
         plan = "Auxiliary";
         totalRetentionInDays = 30;
@@ -48,20 +83,9 @@ $dataMap = @{
             @{ name = "Column1"; type = "string"; description = "Custom column 1." }
         )
     };
-    "SecurityEvents" = @{
-        name = "SecurityEvents";
-        partitions = 20;
-        plan = "Auxiliary";
-        totalRetentionInDays = 30;
-        columns = @(
-            @{ name = "TimeGenerated"; type = "datetime"; description = "The time at which the data was ingested." },
-            @{ name = "RawData"; type = "string"; description = "Body of the event." },
-            @{ name = "ColumnA"; type = "int"; description = "Custom column A." },
-            @{ name = "ColumnB"; type = "string"; description = "Custom column B." }
-        )
-    };
-    "ProxyLogs" = @{
-        name = "ProxyLogs";
+    "WindowsSecurityEvents" = @{
+        name = "WindowsSecurityEvents";
+		eh_name = "WindowsSecurityEvents";
         partitions = 20;
         plan = "Auxiliary";
         totalRetentionInDays = 30;
@@ -81,12 +105,12 @@ $dataMap = @{
 foreach ($table in $dataMap.keys) {
     $item = $datamap[$table]
 
-    IF (-not$(Get-AzEventHub -ResourceGroupName $resourceGroup -NamespaceName $eventHubNamespaceName -Name $item.name -ErrorAction SilentlyContinue) ) {
-        Write-Host "Creating event hub: " $item.name -ForegroundColor Cyan
-        New-AzEventHub -ResourceGroupName $resourceGroup -NamespaceName $eventHubNamespaceName -Name $item.name -RetentionTimeInHour 72 -PartitionCount $item.partitions -CleanupPolicy Delete
-    } 
+    IF (-not$(Get-AzEventHub -ResourceGroupName $resourceGroupEventHub -NamespaceName $eventHubNamespaceName -Name $item.eh_name -ErrorAction SilentlyContinue) ) {
+        Write-Host $("Creating event hub: " + $item.name + " --> " + $item.eh_name) -ForegroundColor Cyan
+        New-AzEventHub -ResourceGroupName $resourceGroupEventHub -NamespaceName $eventHubNamespaceName -Name $item.eh_name -RetentionTimeInHour 24 -PartitionCount $item.partitions -CleanupPolicy Delete -Verbose
+    }
     ELSE {
-        Write-Host "Event hub already exists:" $item.name -ForegroundColor Green
+        Write-Host $("✅ Event hub already exists: " + $item.name + " --> " + $item.eh_name) -ForegroundColor Green
         continue
     }
 }
@@ -126,11 +150,11 @@ foreach ($table in $dataMap.keys) {
 
         IF( $tableExists.StatusCode -like "2*" ) {
             Write-Host $("Update existing workspace table: " + $item.name) -ForegroundColor Magenta -NoNewline
-            $response = Invoke-AzRestMethod -Path $($workspaceId + "/tables/" + $item.name + "_CL" + "?api-version=2023-01-01-preview") -Method "PATCH" -payload $jsonPayload -ErrorAction Stop
+            $response = Invoke-AzRestMethod -Path $($workspaceId + "/tables/" + $item.name + "_CL" + "?api-version=2023-01-01-preview") -Method "PUT" -payload $jsonPayload -ErrorAction Stop
             
         }
         ELSE {
-             Write-Host $("Creating new workspace table: " + $item.name) -ForegroundColor Cyan -NoNewline
+            Write-Host $("Creating new workspace table: " + $item.name) -ForegroundColor Cyan -NoNewline
             $response = Invoke-AzRestMethod -Path $($workspaceId + "/tables/" + $item.name + "_CL" + "?api-version=2023-01-01-preview") -Method "PUT" -payload $jsonPayload -ErrorAction Stop
         }
 
@@ -198,6 +222,7 @@ $dcrTemplate = @'
                     {
                         "streams": [ "Custom-MyEventHubStream" ],
                         "destinations": [ "MyDestinationWorkspace" ],
+                        "transformKql": "source",
                         "outputStream": "[concat('Custom-', parameters('tableName'))]"
                     }
                 ]
@@ -228,8 +253,9 @@ foreach ($table in $dataMap.keys) {
     $templateObject = $dcrTemplate | ConvertFrom-Json
     $templateObject.resources[0].properties.streamDeclarations = $streamDeclarations
 
-    $dcrName = ("EVH-" + $($item.name + "_" + $resourceSuffix).ToLower())
-
+    #$dcrName = ("EVH-" + $($item.name + "_" + $resourceSuffix))
+	$dcrName = ("EVH-" + $($item.name))
+	
     $templateObject.parameters.dataCollectionRuleName.defaultValue = $dcrName
     $templateObject.parameters.workspaceResourceId.defaultValue = $workspaceId
     $templateObject.parameters.endpointResourceId.defaultValue = $dce_id
@@ -239,18 +265,19 @@ foreach ($table in $dataMap.keys) {
     $TemplateHashTable = $templateObject | ConvertTo-Json -Depth 10 | ConvertFrom-Json -AsHashtable
     
     Try {
-        Write-Host $("Creating DCR for event hub: " + $item.name) -ForegroundColor Cyan -NoNewline
-        $deployment = New-AzResourceGroupDeployment -ResourceGroupName $resourceGroup -TemplateObject $TemplateHashTable -DeploymentName $dcrName -ErrorAction Stop
+        Write-Host $("Creating DCR for event hub: " + $item.name + " ") -ForegroundColor Cyan -NoNewline
+        $deployment = New-AzResourceGroupDeployment -ResourceGroupName $resourceGroup -TemplateObject $TemplateHashTable -DeploymentName $dcrName #-ErrorAction Stop -Verbose
 
         IF ($deployment.ProvisioningState -ne "Succeeded") {
-            Write-Error $("Creating DCR failed due to not expected ProvisioningState: " + $item.name)
+            Write-Error $("⛔ Creating DCR failed due to not expected ProvisioningState: " + $item.name)
+			Write-Error $_.Exception.Message
         }
         ELSE {
             Write-Host $(" -> " + $deployment.ProvisioningState) -ForegroundColor Green
         }
     }
     Catch {
-        Write-Error $("Creating DCR failed for event hub " + $item.name)
+        Write-Error $("⛔ Creating DCR failed for event hub " + $item.name)
         Write-Error $_.Exception.Message
     }
 }
@@ -261,8 +288,8 @@ foreach ($table in $dataMap.keys) {
 foreach ($table in $dataMap.keys) {
     $item = $datamap[$table]
 	
-    $dcrName = ("EVH-" + $($item.name + "_" + $resourceSuffix).ToLower())
-	$EventHubId = $($eventHubNamespaceId + "/eventhubs/" + $item.name)
+	$dcrName = ("EVH-" + $($item.name))	
+	$EventHubId = $($eventHubNamespaceId + "/eventhubs/" + $item.eh_name)
 
 	# Get the DCR managed identity
 	$dcr = Get-AzResource -ResourceGroupName $resourceGroup -ResourceType "Microsoft.Insights/dataCollectionRules" -ResourceName $dcrName
@@ -274,7 +301,7 @@ foreach ($table in $dataMap.keys) {
 		New-AzRoleAssignment -ObjectId $principalId -RoleDefinitionName "Azure Event Hubs Data Receiver" -Scope $EventHubId
 	}
     ELSE {
-        Write-Host "Role assignment already exists for event hub:" $item.name -ForegroundColor Green
+        Write-Host "✅ Role assignment already exists for event hub:" $item.name -ForegroundColor Green
         continue
     }
 }
@@ -327,39 +354,38 @@ $dcrAssociateParams = @'
 foreach ($table in $dataMap.keys) {
     $item = $datamap[$table]
 	
-	$dcrName = ("EVH-" + $($item.name + "_" + $resourceSuffix).ToLower())
+	$dcrName = ("EVH-" + $($item.name))
     $dcrId = $($resourceGroupId + "/providers/Microsoft.Insights/dataCollectionRules/" + $dcrName)
-    $dcrAssocName = ("EVH-dcr-assoc-" + $item.name + "_" + $resourceSuffix).ToLower()
+    $dcrAssocName = ("EVH-dcr-assoc-" + $item.name).ToLower()
 
-	$associateTemplate = $dcrAssociateParams -replace "var_EventHubResourceID", $($eventHubNamespaceId + "/eventhubs/" + $item.name)
+	$associateTemplate = $dcrAssociateParams -replace "var_EventHubResourceID", $($eventHubNamespaceId + "/eventhubs/" + $item.eh_name)
     $associateTemplate = $associateTemplate -replace "var_dataCollectionRuleID", $dcrId
     $associateTemplate = $associateTemplate -replace "var_associationName", $dcrAssocName
 
     $TemplateHashTable = $associateTemplate | ConvertFrom-Json -AsHashtable
 
     Try {
-        $existingAssoc = Invoke-AzRestMethod -Path $($eventHubNamespaceId + "/eventhubs/" + $item.name + "/providers/Microsoft.Insights/dataCollectionRuleAssociations/" + $dcrAssocName + "?api-version=2023-03-11") -Method GET
+        $existingAssoc = Invoke-AzRestMethod -Path $($eventHubNamespaceId + "/eventhubs/" + $item.eh_name + "/providers/Microsoft.Insights/dataCollectionRuleAssociations/" + $dcrAssocName + "?api-version=2023-03-11") -Method GET
 
         IF ( $existingAssoc.StatusCode -like "2*" ) {
-            Write-Host $("Associating DCR already done for event hub: " + $item.name) -ForegroundColor Green
+            Write-Host $("✅ Associating DCR already done for event hub: " + $item.name) -ForegroundColor Green
             continue
         }
         ELSE {
 
             Write-Host $("Associating DCR for event hub: " + $item.name) -ForegroundColor Cyan -NoNewline
-            $deployment = New-AzResourceGroupDeployment -ResourceGroupName $resourceGroup -TemplateObject $TemplateHashTable -DeploymentName $dcrAssocName -ErrorAction Stop
+            $deployment = New-AzResourceGroupDeployment -ResourceGroupName $resourceGroupEventHub -TemplateObject $TemplateHashTable -DeploymentName $dcrAssocName -ErrorAction Stop
             
             IF ($deployment.ProvisioningState -ne "Succeeded") {
-                Write-Error $("Associating DCR failed due to not expected ProvisioningState: " + $item.name)
+                Write-Error $("⛔ Associating DCR failed due to not expected ProvisioningState: " + $item.name)
             }
             ELSE {
                 Write-Host $(" -> " + $deployment.ProvisioningState) -ForegroundColor Green
-                #$deployment
             }
         }
     }
     Catch {
-        Write-Error $("Associating DCR failed for " + $item.name)
+        Write-Error $("⛔ Associating DCR failed for " + $item.name)
         Write-Error $_.Exception.Message
     }    
 }
