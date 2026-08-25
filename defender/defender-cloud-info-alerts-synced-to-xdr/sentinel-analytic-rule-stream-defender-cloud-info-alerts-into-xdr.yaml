@@ -1,0 +1,61 @@
+id: "65f0de55-b152-4461-8e15-d3d4ae535936"
+name: "PS - Transform MDC informational alerts into Sentinel ones to get streamed into xdr"
+description: |
+  Defender for Cloud (MDC) only propagates Low/Medium/High alerts to Defender XDR.
+  Informational alerts are intentionally dropped upstream to limit alert fatigue, so they
+  never reach XDR correlation, incident graph, or Advanced Hunting.
+
+  This rule re-materialises those informational MDC alerts as Sentinel alerts/incidents.
+  Because Sentinel (unified SOC) incidents sync into Defender XDR, the signals become
+  available for correlation and enrichment instead of being lost.
+
+  Rationale - with agentic/AI-assisted triage, raw alert volume is no longer the limiting
+  factor - context is. Low-fidelity informational signals are cheap for an agent to
+  discard but expensive to reconstruct after the fact, so full-fidelity ingestion is now
+  preferred over upstream suppression.
+
+  Prerequisite - MDC Continuous Export (alerts -> Log Analytics) must be enabled. The
+  tenant-based Defender for Cloud connector in XDR syncs Low/Medium/High only, so the
+  informational tier is not available through that path.
+severity: "Informational"
+status: "Available"
+requiredDataConnectors: []
+dataTypes:
+  - "SecurityAlert"
+queryFrequency: "10m"
+queryPeriod: "10m"
+triggerOperator: "gt"
+triggerThreshold: 0
+query: |
+  SecurityAlert
+  //| where ProductName == "Azure Security Center"
+  | where ProductName == "Microsoft Defender for Cloud"
+  | where AlertSeverity has "informational"
+  | where Status != "Resolved"
+  | extend ProductComponentName = parse_json(ExtendedProperties).ProductComponentName
+entityMappings:
+  - entityType: "AzureResource"
+    fieldMappings:
+      - identifier: "ResourceId"
+        columnName: "ResourceId"
+customDetails:
+  CompromisedEntity: "CompromisedEntity"
+  ExtendedProperties: "ExtendedProperties"
+  SubscriptionId: "WorkspaceSubscriptionId"
+  TriggerProduct: "ProductComponentName"
+  AlertType: "AlertType"
+alertDetailsOverride:
+  alertDisplayNameFormat: " {{DisplayName}} (mdc/{{ProductComponentName}})"
+  alertDescriptionFormat: "{{Description}}"
+  alertTacticsColumnName: "Tactics"
+  alertDynamicProperties:
+    - alertProperty: "Techniques"
+      value: "Techniques"
+    - alertProperty: "RemediationSteps"
+      value: "RemediationSteps"
+sentinelEntitiesMappings:
+  - columnName: "Entities"
+eventGroupingSettings:
+  aggregationKind: "AlertPerResult"
+version: "1.0.0"
+kind: "Scheduled"
