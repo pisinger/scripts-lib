@@ -16,7 +16,7 @@ The template deploys the workflow disabled by default. It uses sequential entity
 
 ## Deploy
 
-1. Replace `REPLACE-WITH-WORKSPACE-CUSTOMERID-GUID` in `sentinel-entity-analyzer-agent-summary.parameters.json` with the Sentinel workspace **customer ID** GUID. This is not the workspace ARM resource ID.
+1. Replace `REPLACE-WITH-WORKSPACE-ID` in `sentinel-entity-analyzer-agent-summary.parameters.json` with the Sentinel workspace **customer ID** GUID. This is not the workspace ARM resource ID.
 2. Deploy the template to the target resource group:
 
 ```bash
