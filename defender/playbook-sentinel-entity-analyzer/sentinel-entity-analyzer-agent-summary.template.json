@@ -1,0 +1,995 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "comments": "Microsoft Sentinel incident-triggered playbook (Consumption logic app). Variant of playbook-entity-analyzer.template.json that posts exactly ONE incident comment instead of one per entity. For every Account, Url and DnsResolution entity it calls the Microsoft Sentinel MCP Entity Analyzer (preview) and appends the verdict to a run-scoped array variable. After the loop it sends the whole set to a Logic Apps Agent action (type 'Agent', no tools - pure summarization) with instructions to emit one crisp block per entity, then writes that single summary back as one incident comment. Fully tenant-agnostic: subscription, resource group, region, workspace and playbook name all come from ARM parameters or resourceGroup()/subscription().",
+    "differencesFromPerEntityVariant": [
+      "No comment is posted inside the loop. Every loop iteration appends exactly one finding object to the 'findings' array variable, including skipped entities and failed analyzer calls, so length(findings) always equals the number of filtered entities.",
+      "One agent call per incident run condenses all analyzer verdicts into one crisp block per entity.",
+      "Exactly one Add-comment action executes per run: the agent summary, or - if the agent fails or returns empty content - the raw analyzer output rendered deterministically from the same array. The analysis is never lost because the model call failed.",
+      "Two extra ARM parameters tune the model behaviour without editing the template: agentInstructions (the system prompt) and maxAnalysisCharsPerEntity (payload trimming). Agent summaries longer than 28000 characters are posted as two incident comments with a 10-second delay between them.",
+      "Comment carries traffic-light emoji: a deterministic worst-case light in the header, one per entity in the body, and a risk key in the footer. Entities render as friendlyName plus the analyzer identifier in parentheses (entityLabel) rather than a bare Entra object GUID.",
+      "Summarization uses a native Logic Apps Agent action with no tools, not the Security Copilot connector. That removes the securitycopilot API connection entirely - the one connector with no managed-identity support and a mandatory one-time interactive authorization."
+    ],
+    "prerequisites": [
+      "Workspace onboarded to the Microsoft Defender portal AND to the Microsoft Sentinel data lake - the Entity Analyzer reads lake data and does not work without it.",
+      "Sentinel SOAR Essentials solution installed from Content hub.",
+      "Microsoft Sentinel Automation Contributor granted to the Azure Security Insights service account on THIS resource group, otherwise automation rules cannot run the playbook.",
+      "Playbook managed identity needs: Microsoft Sentinel Responder on the workspace (to add comments) and data lake read access for the Entity Analyzer - see deploy.sh step 4.",
+      "The sentinelmcp connector is unavailable in Azure Government, Azure China and DoD regions.",
+      "Consumption agentic workflows are in PREVIEW. Agent token usage bills as Enterprise Units on the Logic Apps meter; no Azure OpenAI resource of your own is involved. The Entity Analyzer still consumes Security Copilot SCUs independently of the agent."
+    ],
+    "verifyBeforeTrusting": [
+      "The Agent action MUST sit at the top level of the definition. Nesting it inside a Condition is rejected: ARM answers InvalidWorkflow, \"The workflow run action 'Agent' has type 'Agent' that is not supported\" - verified by deploying both shapes. Only the comment posting stays inside Check_anything_was_analyzed; payload, prompt, agent and extraction all run unconditionally.",
+      "Agent settings must be literal values, not runtime expressions. agentModelType, maximumTokenCount and limit.count are substituted at ARM deploy time via [parameters('x')], so the stored definition holds literals. A definition using @parameters('x') in those fields left the ARM deployment hanging rather than failing cleanly - which is what surfaces later as InternalServerError. Runtime expressions in messages[].content ARE supported and verified, which is how the findings payload reaches the agent.",
+      "Render_raw_blocks emits three paragraphs per finding - header, analysis, recommendation - and converts the analyzer's own newlines to <br>. The analyzer separates its sections ('Triggered Alerts:', 'IP addresses flagged...', 'Suspicious User Agents:', 'Anomalous Behaviors:') with \\n\\n, which HTML collapses to spaces, so without the conversion the whole analysis renders as one unbroken blob and the recommendation runs on from it.",
+      "Because the agent cannot be gated by a Condition, it is called on every run where the loop completed - including incidents where no entity was analyzable. That spends agent tokens for an empty payload. The comment actions remain conditional, so no misleading comment is posted.",
+      "The Agent action shape is taken from a real Consumption autonomous agent workflow: definition.metadata {agentType 'autonomous', notes {}} emitted BEFORE $schema; inputs.parameters {messages, agentModelType 'AzureOpenAI', agentModelSettings.agentHistoryReductionSettings}; an empty tools {} object; and limit.count. Consumption auto-selects the region's Azure OpenAI model, so there is no model connection, no deploymentId and no modelConfigurations - those are Standard-only.",
+      "The sample carried only a system message. This template also sends a user message holding the findings JSON, which is the normal chat shape but is not something the sample proves. If the action rejects two messages, move the payload into the system content with concat() and drop the user entry.",
+      "Unverified: the property name carrying the agent's reply. Agent_summary_text coalesces lastAssistantMessage.content, content, output and text - all null-safe accesses, no indexing, since coalesce evaluates every argument eagerly. If none match, the value is empty and the run posts the deterministic raw comment, so a wrong guess costs formatting rather than the analysis. Read the Summarize_with_agent output once and pin the real path.",
+      "Agent_summary_text reads the agent reply through coalesce over four candidate property names (lastAssistantMessage.content, content, output, text) because the Agent action's output schema is undocumented. All are null-safe property accesses with no array indexing, since coalesce evaluates every argument eagerly. If none match, the value is empty and the run posts the deterministic raw comment instead of failing - so a wrong guess degrades gracefully. Read the Summarize_with_agent output once and pin the real path.",
+      "Microsoft Sentinel Entity Analyzer rejects IP addresses: ErrorCategory Client, ErrorCode InvalidField, \"IP addresses are not supported. Please provide a domain name instead (e.g., example.com).\" The Ip -> entityType Url routing that earlier versions attempted was never documented by Microsoft and is refused by the service, so IP entities are no longer sent.",
+      "WDL concat() joins STRINGS and does not append arrays: concat(split(x,'.'), createArray('0')) returns the String '[\"x\"][\"0\"]' and indexing it fails at runtime with \"property '0' cannot be selected\". union() returns an array but de-duplicates. If you add logic that needs a padded array, pad the string and then split(). Related: if() evaluates BOTH arguments, so a guarded substring or string(null) still faults - use slice() and coalesce().",
+      "Payload trimming uses slice(), not substring(). The substring() reference warns that startIndex + length must be LESS than the string length or it errors, so substring(s, 0, min(length(s), cap)) sits exactly on that boundary when s is shorter than cap. slice() is documented to clamp when endIndex exceeds the string length, so it needs no min() guard at all.",
+      "Append to array variable inside a for-each with concurrency > 1: Microsoft documents that variable changes in a concurrent loop can produce unexpected results. The footer of every comment prints 'N of M entities analyzed' precisely so a lost append is visible. Set entityConcurrency to 1 for the guaranteed-safe ordering, at the cost of wall-clock time.",
+      "The Entity Analyzer's classification enum is not published by Microsoft. riskEmoji is derived by case-insensitive substring match on the classification, negations first ('no suspicious' before 'suspicious'), so 'No suspicious activity found' maps to clean and 'Suspicious activity found' to medium. Read the first real verdicts and extend the chain in Append_analyzed_finding if your tenant returns wording the chain does not cover - anything unmatched falls through to the low band.",
+      "The traffic light in the comment header is computed in the workflow from the worst riskEmoji present, not by the model. The per-entity emoji are handed to the agent in the payload and it is instructed to copy them verbatim; if a run shows emoji that disagree with the header, the model substituted its own and the instruction needs tightening.",
+      "The agent is asked for an HTML fragment. Code fences are stripped defensively, but a model that ignores the format instruction produces a comment containing literal markdown. Read the first real summaries before enabling the playbook.",
+      "Agent summaries are checked after the response is extracted. If the summary exceeds 28000 characters, the first 28000 characters are posted, the workflow waits 10 seconds, and the remainder is posted as a second incident comment. The split is character-based and can occur inside an HTML element; keep the agent output compact and review long comments.",
+      "Managed-identity auth on the sentinelmcp connection is asserted via parameterValueSet 'managedIdentityAuth' (the connector's documented Auth ID). This ARM shape is not documented by Microsoft - after deploying, open the connection and confirm status is Connected. If it shows unauthenticated, re-authorize it once in the portal (Managed Identity) or swap the block for \"parameterValueType\": \"Alternative\".",
+      "Microsoft Sentinel connector managed-identity auth is still preview - check its current status.",
+      "Entity Analyzer api-version 2025-08-01-preview is pinned. Preview api-versions get retired; confirm it is still served before a production deploy.",
+      "Trigger body paths (object.properties.relatedEntities, entity kind values, aadUserId / additionalData.UserPrincipalName / url) against the designer's dynamic content on first deploy.",
+      "Do NOT rename the trigger after deployment - Sentinel and automation rules bind to the original trigger name."
+    ],
+    "knownLimits": [
+      "User Entity Analyzer supports Microsoft Entra object-ID users only. On-premises-AD-only accounts are not supported and will fault.",
+      "User analysis needs AlertEvidence, SigninLogs, CloudAppEvents and IdentityInfo present in the data lake. Missing tables degrade accuracy or error.",
+      "sentinelmcp throttle: 100 calls per connection per 60 seconds.",
+      "Analyzer results expire after one hour.",
+      "A Select whose map is a scalar must hold a SINGLE expression token. Render_raw_blocks therefore uses one @concat(...) rather than literal HTML with embedded @{...} interpolation - the designer tries to JSON.parse the literal text of a mixed string and reports \"invalid JSON\", even though the runtime accepts it.",
+      "Logic Apps evaluates if() arguments eagerly, so payload trimming uses substring(s, 0, min(length(s), maxAnalysisCharsPerEntity)) rather than an if()-guarded substring - a guarded substring would still throw on analysis text shorter than the cap.",
+      "If the single Add-comment action itself fails after retries the fallback action fires and may post a duplicate. Losing the analysis is the worse failure, so this trade is deliberate."
+    ],
+    "entityCoverage": [
+      "Account -> entityType User. Value order: aadUserId, additionalData.UserPrincipalName, userPrincipalName, then name + '@' + upnSuffix reconstructed. Since 1 July 2026 the Account 'Name' identifier holds only the UPN prefix, so friendlyName alone is no longer a usable UPN.",
+      "Url -> entityType Url. Documented.",
+      "DnsResolution (DNS) -> entityType Url, domain passed in the url field. Documented: analyze_url_entity covers 'URLs, domains, and user entities'.",
+      "Ip -> NOT SUPPORTED. Microsoft Sentinel Entity Analyzer rejects IP addresses: ErrorCategory Client, ErrorCode InvalidField, \"IP addresses are not supported. Please provide a domain name instead (e.g., example.com).\" The Ip -> entityType Url routing that earlier versions attempted was never documented by Microsoft and is refused by the service, so IP entities are no longer sent."
+    ]
+  },
+  "parameters": {
+    "playbookName": {
+      "type": "string",
+      "defaultValue": "sentinel-entity-analyzer-summary",
+      "metadata": {
+        "description": "Name of the logic app / playbook. Also used to name the three API connections."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Region for the logic app and its connections. Must be a region where the sentinelmcp connector is available (not Gov/China/DoD)."
+      }
+    },
+    "workspaceId": {
+      "type": "string",
+      "metadata": {
+        "description": "GUID (customerId) of the Sentinel data-lake-enabled Log Analytics workspace. NOT the ARM resource ID."
+      }
+    },
+    "lookBackDays": {
+      "type": "int",
+      "defaultValue": 7,
+      "minValue": 1,
+      "maxValue": 30,
+      "metadata": {
+        "description": "How far back the Entity Analyzer looks. Higher values increase latency and cost."
+      }
+    },
+    "entityConcurrency": {
+      "type": "int",
+      "defaultValue": 1,
+      "minValue": 1,
+      "maxValue": 20,
+      "metadata": {
+        "description": "Degree of parallelism for the per-entity loop. Default 1 (sequential). Concurrent analyzer calls compete for Security Copilot capacity: on a minimally provisioned tenant one call succeeds and the other is refused, alternating between entities run to run. Raise it only with SCU headroom and overage enabled. 1 also removes the documented risk of losing array-variable appends in a concurrent loop."
+      }
+    },
+    "workflowState": {
+      "type": "string",
+      "defaultValue": "Disabled",
+      "allowedValues": [
+        "Disabled",
+        "Enabled"
+      ],
+      "metadata": {
+        "description": "Deploy Disabled for a safe first deploy, then enable after one manual run has been read end to end."
+      }
+    },
+    "sentinelTemplateVersion": {
+      "type": "string",
+      "defaultValue": "1.0",
+      "metadata": {
+        "description": "Value for the hidden-SentinelTemplateVersion tag."
+      }
+    },
+    "reportIpEntities": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "List Ip entities on the incident as skipped, so the report states they were seen and why they were not analyzed. They are never sent to the analyzer - it refuses IP addresses outright. Set false to drop Ip entities before the loop and omit them from the counts entirely."
+      }
+    },
+    "maxAnalysisCharsPerEntity": {
+      "type": "int",
+      "defaultValue": 4000,
+      "minValue": 500,
+      "maxValue": 20000,
+      "metadata": {
+        "description": "Each entity's analyzer prose is trimmed to this many characters before it is sent to the agent. Caps prompt size and agent token spend on incidents with many entities."
+      }
+    },
+    "agentInstructions": {
+      "type": "string",
+      "defaultValue": "You are condensing Microsoft Sentinel Entity Analyzer output into a single SOC incident comment. Use ONLY the findings supplied below. Do not look up any other data and do not invent facts. Return an HTML fragment and nothing else: no markdown, no code fences, no <html>, <head> or <body> tags, no preamble and no closing remarks. Wrap every paragraph as <p class=\"editor-paragraph\">. Use only <p>, <strong>, <em> and <br> - no lists, no tables, no headings. First emit one paragraph: <strong>Overall:</strong> then the incident verdict in one sentence, then <br><strong>Do first:</strong> then the single highest-priority action. Then, for each finding in the order given, emit exactly one paragraph built in this order: the finding's riskEmoji value copied verbatim, a space, <strong>entityType: entityLabel</strong>, ' &mdash; ', the verdict; <br><em>Why:</em> then at most two sentences of concrete reasoning; then up to four evidence lines, each as '<br>&bull; ' followed by at most twelve words naming the actual artefact (alert name, IP address, user agent, behaviour) rather than a restatement; then <br><em>Action:</em> then one imperative clause or the word None. Copy riskEmoji, entityType and entityLabel verbatim from the input and never substitute your own emoji or re-derive the risk. Be crisp: no boilerplate, no hedging, no restating the verdict word inside the reasoning, no repetition between paragraphs. Where many similar artefacts appear, aggregate them ('12 sign-in IPs flagged by threat intelligence') instead of listing each. For any finding whose status is not 'analyzed', state plainly what went wrong, emit no evidence lines, and set the action to investigate that entity manually.",
+      "metadata": {
+        "description": "System instructions for the Agent action that writes the comment."
+      }
+    },
+    "agentModelType": {
+      "type": "string",
+      "defaultValue": "AzureOpenAI",
+      "metadata": {
+        "description": "agentModelType on the Agent action. 'AzureOpenAI' is the value a Consumption autonomous agent workflow emits - Consumption auto-selects the Azure OpenAI model available in the logic app's region, so no model connection or deploymentId is involved."
+      }
+    },
+    "agentMaxHistoryTokens": {
+      "type": "int",
+      "defaultValue": 128000,
+      "minValue": 1000,
+      "maxValue": 1000000,
+      "metadata": {
+        "description": "agentModelSettings.agentHistoryReductionSettings.maximumTokenCount - the agent trims its message history once it exceeds this many tokens. 128000 is the portal default."
+      }
+    },
+    "agentIterationLimit": {
+      "type": "int",
+      "defaultValue": 10,
+      "minValue": 1,
+      "maxValue": 100,
+      "metadata": {
+        "description": "Agent action limit.count - max agent loop iterations. This agent has no tools and answers in one turn, so a small value suffices."
+      }
+    },
+    "riskEmojis": {
+      "type": "object",
+      "defaultValue": {
+        "high": "🔴",
+        "medium": "🟠",
+        "low": "🟡",
+        "clean": "🟢",
+        "unknown": "⚪"
+      },
+      "metadata": {
+        "description": "Traffic-light emoji per risk band. high=confirmed compromise or malicious, medium=suspicious, low=analyzed with nothing notable, clean=explicitly not suspicious, unknown=skipped, errored or inconclusive. The Entity Analyzer's classification enum is not published by Microsoft, so classification text is matched case-insensitively with negations tested first - see verifyBeforeTrusting."
+      }
+    }
+  },
+  "variables": {
+    "sentinelConnectionName": "[concat('azuresentinel-', parameters('playbookName'))]",
+    "mcpConnectionName": "[concat('sentinelmcp-', parameters('playbookName'))]",
+    "managedApiBase": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', parameters('location'), '/managedApis/')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('sentinelConnectionName')]",
+      "location": "[parameters('location')]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('sentinelConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueType": "Alternative",
+        "api": {
+          "id": "[concat(variables('managedApiBase'), 'azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('mcpConnectionName')]",
+      "location": "[parameters('location')]",
+      "kind": "V1",
+      "properties": {
+        "displayName": "[variables('mcpConnectionName')]",
+        "customParameterValues": {},
+        "parameterValueSet": {
+          "name": "managedIdentityAuth",
+          "values": {}
+        },
+        "api": {
+          "id": "[concat(variables('managedApiBase'), 'sentinelmcp')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('playbookName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "tags": {
+        "hidden-SentinelTemplateName": "Incident Trigger Entity Analyzer Agent Summary",
+        "hidden-SentinelTemplateVersion": "[parameters('sentinelTemplateVersion')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+        "[resourceId('Microsoft.Web/connections', variables('mcpConnectionName'))]"
+      ],
+      "properties": {
+        "state": "[parameters('workflowState')]",
+        "definition": {
+          "metadata": {
+            "agentType": "autonomous",
+            "notes": {}
+          },
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "type": "Object",
+              "defaultValue": {}
+            },
+            "workspaceId": {
+              "type": "String",
+              "defaultValue": ""
+            },
+            "lookBackDays": {
+              "type": "Int",
+              "defaultValue": 7
+            },
+            "reportIpEntities": {
+              "type": "Bool",
+              "defaultValue": true
+            },
+            "maxAnalysisCharsPerEntity": {
+              "type": "Int",
+              "defaultValue": 4000
+            },
+            "riskEmojis": {
+              "type": "Object",
+              "defaultValue": {}
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "body": {
+                  "callback_url": "@listCallbackUrl()"
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_findings": {
+              "runAfter": {},
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "findings",
+                    "type": "array",
+                    "value": []
+                  }
+                ]
+              }
+            },
+            "Filter_supported_entities": {
+              "runAfter": {
+                "Initialize_findings": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Query",
+              "inputs": {
+                "from": "@coalesce(triggerBody()?['object']?['properties']?['relatedEntities'], json('[]'))",
+                "where": "@contains(if(parameters('reportIpEntities'), createArray('account', 'user', 'url', 'dnsresolution', 'dns', 'ip'), createArray('account', 'user', 'url', 'dnsresolution', 'dns')), toLower(coalesce(item()?['kind'], '')))"
+              }
+            },
+            "For_each_entity": {
+              "runAfter": {
+                "Filter_supported_entities": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Foreach",
+              "foreach": "@body('Filter_supported_entities')",
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": "[parameters('entityConcurrency')]"
+                }
+              },
+              "actions": {
+                "EntityKind": {
+                  "runAfter": {},
+                  "type": "Compose",
+                  "inputs": "@toLower(trim(coalesce(items('For_each_entity')?['kind'], '')))"
+                },
+                "NormalizedEntityType": {
+                  "runAfter": {
+                    "EntityKind": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(or(equals(outputs('EntityKind'), 'account'), equals(outputs('EntityKind'), 'user')), 'user', if(equals(outputs('EntityKind'), 'url'), 'url', if(or(equals(outputs('EntityKind'), 'dnsresolution'), equals(outputs('EntityKind'), 'dns')), 'domain', if(equals(outputs('EntityKind'), 'ip'), 'ip', 'skip'))))"
+                },
+                "EntityValue": {
+                  "runAfter": {
+                    "NormalizedEntityType": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(equals(outputs('NormalizedEntityType'), 'user'), coalesce(items('For_each_entity')?['properties']?['aadUserId'], items('For_each_entity')?['properties']?['additionalData']?['UserPrincipalName'], items('For_each_entity')?['properties']?['userPrincipalName'], if(and(not(empty(coalesce(items('For_each_entity')?['properties']?['name'], ''))), not(empty(coalesce(items('For_each_entity')?['properties']?['upnSuffix'], '')))), concat(string(items('For_each_entity')?['properties']?['name']), '@', string(items('For_each_entity')?['properties']?['upnSuffix'])), ''), ''), if(equals(outputs('NormalizedEntityType'), 'url'), coalesce(items('For_each_entity')?['properties']?['url'], items('For_each_entity')?['properties']?['additionalData']?['Url'], items('For_each_entity')?['properties']?['additionalData']?['url'], items('For_each_entity')?['properties']?['friendlyName'], ''), if(equals(outputs('NormalizedEntityType'), 'domain'), coalesce(items('For_each_entity')?['properties']?['domainName'], items('For_each_entity')?['properties']?['additionalData']?['DomainName'], items('For_each_entity')?['properties']?['friendlyName'], ''), if(equals(outputs('NormalizedEntityType'), 'ip'), coalesce(items('For_each_entity')?['properties']?['address'], items('For_each_entity')?['properties']?['additionalData']?['Address'], items('For_each_entity')?['properties']?['friendlyName'], ''), ''))))"
+                },
+                "Check_entity_is_analyzable": {
+                  "runAfter": {
+                    "EntityLabel": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "equals": [
+                          "@contains(createArray('user', 'url', 'domain'), outputs('NormalizedEntityType'))",
+                          true
+                        ]
+                      },
+                      {
+                        "not": {
+                          "equals": [
+                            "@trim(string(outputs('EntityValue')))",
+                            ""
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Analyzer_properties": {
+                      "runAfter": {},
+                      "type": "Compose",
+                      "inputs": "@if(equals(outputs('NormalizedEntityType'), 'user'), addProperty(addProperty(json('{}'), 'entityType', 'User'), 'userId', string(outputs('EntityValue'))), addProperty(addProperty(json('{}'), 'entityType', 'Url'), 'url', string(outputs('EntityValue'))))"
+                    },
+                    "Entity_Analyzer": {
+                      "runAfter": {
+                        "Analyzer_properties": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['sentinelmcp']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/aiprimitives/analysis",
+                        "queries": {
+                          "api-version": "2025-08-01-preview"
+                        },
+                        "body": {
+                          "workspaceId": "@parameters('workspaceId')",
+                          "lookBackDays": "@parameters('lookBackDays')",
+                          "properties": "@outputs('Analyzer_properties')"
+                        },
+                        "retryPolicy": {
+                          "type": "exponential",
+                          "count": 3,
+                          "interval": "PT30S"
+                        }
+                      },
+                      "limit": {
+                        "timeout": "PT10M"
+                      }
+                    },
+                    "Parse_analyzer_response": {
+                      "runAfter": {
+                        "Entity_Analyzer": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ParseJson",
+                      "inputs": {
+                        "content": "@body('Entity_Analyzer')",
+                        "schema": {
+                          "type": "object",
+                          "properties": {
+                            "status": {
+                              "type": "string"
+                            },
+                            "classification": {
+                              "type": "string"
+                            },
+                            "analysis": {
+                              "type": "string"
+                            },
+                            "recommendation": {
+                              "type": "string"
+                            },
+                            "disclaimer": {
+                              "type": "string"
+                            },
+                            "dataSourceList": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "properties": {
+                              "type": "object",
+                              "properties": {
+                                "entityType": {
+                                  "type": "string"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Check_verdict_is_usable": {
+                      "runAfter": {
+                        "Verdict_lower": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "If",
+                      "expression": {
+                        "and": [
+                          {
+                            "not": {
+                              "equals": [
+                                "@trim(coalesce(body('Parse_analyzer_response')?['analysis'], ''))",
+                                ""
+                              ]
+                            }
+                          }
+                        ]
+                      },
+                      "actions": {
+                        "Append_analyzed_finding": {
+                          "runAfter": {},
+                          "type": "AppendToArrayVariable",
+                          "inputs": {
+                            "name": "findings",
+                            "value": {
+                              "entityType": "@{outputs('NormalizedEntityType')}",
+                              "entity": "@{outputs('EntityValue')}",
+                              "entityLabel": "@{outputs('EntityLabel')}",
+                              "status": "analyzed",
+                              "riskEmoji": "@if(or(contains(outputs('Verdict_lower'), 'no suspicious'), contains(outputs('Verdict_lower'), 'not suspicious'), contains(outputs('Verdict_lower'), 'no malicious'), contains(outputs('Verdict_lower'), 'no evidence'), contains(outputs('Verdict_lower'), 'benign'), contains(outputs('Verdict_lower'), 'clean')), parameters('riskEmojis')['clean'], if(or(contains(outputs('Verdict_lower'), 'compromis'), contains(outputs('Verdict_lower'), 'malicious'), contains(outputs('Verdict_lower'), 'confirmed'), contains(outputs('Verdict_lower'), 'high risk')), parameters('riskEmojis')['high'], if(contains(outputs('Verdict_lower'), 'suspicious'), parameters('riskEmojis')['medium'], if(or(contains(outputs('Verdict_lower'), 'inconclusive'), contains(outputs('Verdict_lower'), 'insufficient'), contains(outputs('Verdict_lower'), 'unknown'), contains(outputs('Verdict_lower'), 'unable'), empty(outputs('Verdict_lower'))), parameters('riskEmojis')['unknown'], parameters('riskEmojis')['low']))))",
+                              "classification": "@{coalesce(body('Parse_analyzer_response')?['classification'], 'Unknown')}",
+                              "analysis": "@{body('Parse_analyzer_response')?['analysis']}",
+                              "recommendation": "@{coalesce(body('Parse_analyzer_response')?['recommendation'], 'None provided.')}",
+                              "dataSources": "@coalesce(body('Parse_analyzer_response')?['dataSourceList'], json('[]'))",
+                              "disclaimer": "@{coalesce(body('Parse_analyzer_response')?['disclaimer'], '')}",
+                              "note": ""
+                            }
+                          }
+                        }
+                      },
+                      "else": {
+                        "actions": {
+                          "Append_no_verdict_finding": {
+                            "runAfter": {},
+                            "type": "AppendToArrayVariable",
+                            "inputs": {
+                              "name": "findings",
+                              "value": {
+                                "entityType": "@{outputs('NormalizedEntityType')}",
+                                "entity": "@{outputs('EntityValue')}",
+                                "entityLabel": "@{outputs('EntityLabel')}",
+                                "status": "no-verdict",
+                                "riskEmoji": "@parameters('riskEmojis')['unknown']",
+                                "classification": "",
+                                "analysis": "",
+                                "recommendation": "",
+                                "dataSources": [],
+                                "disclaimer": "",
+                                "note": "Entity Analyzer returned status '@{coalesce(body('Parse_analyzer_response')?['status'], 'unknown')}' with no analysis text."
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "Append_failed_finding": {
+                      "runAfter": {
+                        "Entity_Analyzer": [
+                          "Failed",
+                          "TimedOut",
+                          "Skipped"
+                        ]
+                      },
+                      "type": "AppendToArrayVariable",
+                      "inputs": {
+                        "name": "findings",
+                        "value": {
+                          "entityType": "@{outputs('NormalizedEntityType')}",
+                          "entity": "@{outputs('EntityValue')}",
+                          "entityLabel": "@{outputs('EntityLabel')}",
+                          "status": "error",
+                          "riskEmoji": "@parameters('riskEmojis')['unknown']",
+                          "classification": "",
+                          "analysis": "",
+                          "recommendation": "",
+                          "dataSources": [],
+                          "disclaimer": "",
+                          "note": "Entity Analyzer call failed. Common causes: managed identity lacks data lake read access; on-premises-only AD account; workspace not onboarded to the data lake; or, for ip entities, the undocumented Url routing was rejected."
+                        }
+                      }
+                    },
+                    "Verdict_lower": {
+                      "runAfter": {
+                        "Parse_analyzer_response": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Compose",
+                      "inputs": "@toLower(trim(coalesce(body('Parse_analyzer_response')?['classification'], '')))"
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "Append_skipped_finding": {
+                        "runAfter": {},
+                        "type": "AppendToArrayVariable",
+                        "inputs": {
+                          "name": "findings",
+                          "value": {
+                            "entityType": "@{outputs('NormalizedEntityType')}",
+                            "entity": "@{outputs('EntityValue')}",
+                            "entityLabel": "@{outputs('EntityLabel')}",
+                            "status": "skipped",
+                            "riskEmoji": "@parameters('riskEmojis')['unknown']",
+                            "classification": "",
+                            "analysis": "",
+                            "recommendation": "",
+                            "dataSources": [],
+                            "disclaimer": "",
+                            "note": "@{if(equals(outputs('NormalizedEntityType'), 'ip'), 'Not analyzable: the Entity Analyzer refuses IP addresses (ErrorCode InvalidField). Reported for visibility only.', if(equals(outputs('NormalizedEntityType'), 'skip'), 'Entity kind is not supported by the analyzer.', 'No usable identifier could be read from the entity.'))}"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "EntityLabel": {
+                  "runAfter": {
+                    "EntityValue": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose",
+                  "inputs": "@if(and(not(empty(trim(coalesce(items('For_each_entity')?['properties']?['friendlyName'], '')))), not(equals(toLower(trim(string(coalesce(items('For_each_entity')?['properties']?['friendlyName'], '')))), toLower(trim(string(outputs('EntityValue'))))))), concat(trim(string(items('For_each_entity')?['properties']?['friendlyName'])), ' (', trim(string(outputs('EntityValue'))), ')'), trim(string(outputs('EntityValue'))))"
+                }
+              }
+            },
+            "Analyzed_findings": {
+              "runAfter": {
+                "For_each_entity": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "type": "Query",
+              "inputs": {
+                "from": "@variables('findings')",
+                "where": "@equals(item()?['status'], 'analyzed')"
+              }
+            },
+            "Reportable_findings": {
+              "runAfter": {
+                "Analyzed_findings": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Query",
+              "inputs": {
+                "from": "@variables('findings')",
+                "where": "@not(equals(item()?['status'], 'skipped'))"
+              }
+            },
+            "Risk_emojis": {
+              "runAfter": {
+                "Reportable_findings": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select",
+              "inputs": {
+                "from": "@body('Reportable_findings')",
+                "select": "@item()?['riskEmoji']"
+              }
+            },
+            "Worst_risk_emoji": {
+              "runAfter": {
+                "Risk_emojis": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@if(contains(body('Risk_emojis'), parameters('riskEmojis')['high']), parameters('riskEmojis')['high'], if(contains(body('Risk_emojis'), parameters('riskEmojis')['medium']), parameters('riskEmojis')['medium'], if(contains(body('Risk_emojis'), parameters('riskEmojis')['low']), parameters('riskEmojis')['low'], if(contains(body('Risk_emojis'), parameters('riskEmojis')['clean']), parameters('riskEmojis')['clean'], parameters('riskEmojis')['unknown']))))"
+            },
+            "Agent_payload": {
+              "runAfter": {
+                "Worst_risk_emoji": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select",
+              "inputs": {
+                "from": "@body('Reportable_findings')",
+                "select": {
+                  "entity": "@item()?['entity']",
+                  "entityLabel": "@coalesce(item()?['entityLabel'], item()?['entity'])",
+                  "entityType": "@item()?['entityType']",
+                  "status": "@item()?['status']",
+                  "riskEmoji": "@coalesce(item()?['riskEmoji'], '')",
+                  "verdict": "@coalesce(item()?['classification'], '')",
+                  "analysis": "@concat(slice(coalesce(item()?['analysis'], ''), 0, parameters('maxAnalysisCharsPerEntity')), if(greater(length(coalesce(item()?['analysis'], '')), parameters('maxAnalysisCharsPerEntity')), ' [truncated]', ''))",
+                  "recommendation": "@coalesce(item()?['recommendation'], '')",
+                  "dataSources": "@coalesce(item()?['dataSources'], json('[]'))",
+                  "note": "@coalesce(item()?['note'], '')"
+                }
+              }
+            },
+            "Render_raw_blocks": {
+              "runAfter": {
+                "Agent_payload": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select",
+              "inputs": {
+                "from": "@body('Reportable_findings')",
+                "select": "@concat('<p class=\"editor-paragraph\">', coalesce(item()?['riskEmoji'], ''), ' <strong>', coalesce(item()?['entityType'], ''), ': ', coalesce(item()?['entityLabel'], item()?['entity'], ''), '</strong> &mdash; ', if(equals(item()?['status'], 'analyzed'), if(empty(trim(coalesce(item()?['classification'], ''))), 'Unknown', item()?['classification']), concat('status ', coalesce(item()?['status'], 'unknown'))), '</p><p class=\"editor-paragraph\">', replace(replace(if(equals(item()?['status'], 'analyzed'), coalesce(item()?['analysis'], ''), coalesce(item()?['note'], '')), decodeUriComponent('%0D%0A'), '<br>'), decodeUriComponent('%0A'), '<br>'), '</p><p class=\"editor-paragraph\"><em>Recommendation:</em> ', if(empty(trim(coalesce(item()?['recommendation'], ''))), 'None provided.', item()?['recommendation']), '</p>')"
+              }
+            },
+            "Agent_prompt": {
+              "runAfter": {
+                "Render_raw_blocks": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@concat('Incident: ', coalesce(triggerBody()?['object']?['properties']?['title'], '(untitled)'), decodeUriComponent('%0A'), 'Severity: ', coalesce(triggerBody()?['object']?['properties']?['severity'], 'Unknown'), decodeUriComponent('%0A'), 'Entity Analyzer look-back days: ', string(parameters('lookBackDays')), decodeUriComponent('%0A'), 'Findings to summarize: ', string(length(body('Reportable_findings'))), decodeUriComponent('%0A%0A'), 'ENTITY ANALYZER FINDINGS (JSON):', decodeUriComponent('%0A'), string(body('Agent_payload')))"
+            },
+            "Summarize_with_agent": {
+              "type": "Agent",
+              "inputs": {
+                "parameters": {
+                  "messages": [
+                    {
+                      "role": "system",
+                      "content": "[parameters('agentInstructions')]"
+                    },
+                    {
+                      "role": "user",
+                      "content": "@{outputs('Agent_prompt')}"
+                    }
+                  ],
+                  "agentModelType": "[parameters('agentModelType')]",
+                  "agentModelSettings": {
+                    "agentHistoryReductionSettings": {
+                      "agentHistoryReductionType": "maximumTokenCountReduction",
+                      "maximumTokenCount": "[parameters('agentMaxHistoryTokens')]"
+                    }
+                  }
+                }
+              },
+              "tools": {},
+              "runAfter": {
+                "Agent_prompt": [
+                  "Succeeded"
+                ]
+              },
+              "limit": {
+                "count": "[parameters('agentIterationLimit')]"
+              }
+            },
+            "Agent_summary_text": {
+              "runAfter": {
+                "Summarize_with_agent": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@trim(coalesce(body('Summarize_with_agent')?['lastAssistantMessage']?['content'], body('Summarize_with_agent')?['content'], body('Summarize_with_agent')?['output'], body('Summarize_with_agent')?['text'], ''))"
+            },
+            "Summary_first_part": {
+              "runAfter": {
+                "Agent_summary_text": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@if(greater(length(outputs('Agent_summary_text')), 28000), slice(outputs('Agent_summary_text'), 0, 28000), outputs('Agent_summary_text'))"
+            },
+            "Summary_second_part": {
+              "runAfter": {
+                "Summary_first_part": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose",
+              "inputs": "@if(greater(length(outputs('Agent_summary_text')), 28000), slice(outputs('Agent_summary_text'), 28000, length(outputs('Agent_summary_text'))), '')"
+            },
+            "Add_raw_comment_after_agent_failure": {
+              "runAfter": {
+                "Summarize_with_agent": [
+                  "Failed",
+                  "TimedOut",
+                  "Skipped"
+                ]
+              },
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Incidents/Comment",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "<p class=\"editor-paragraph\">@{outputs('Worst_risk_emoji')} <strong>Sentinel Entity Analyzer &mdash; incident summary (unsummarized)</strong></p><p class=\"editor-paragraph\"><em>The agent action did not complete, so the raw Entity Analyzer output is posted instead. Check the agent model configuration and the Summarize_with_agent action in the run history.</em></p>@{join(body('Render_raw_blocks'), '')}<p class=\"editor-paragraph\"><em>Risk key: @{parameters('riskEmojis')['high']} compromised or malicious &middot; @{parameters('riskEmojis')['medium']} suspicious &middot; @{parameters('riskEmojis')['low']} analyzed, nothing notable &middot; @{parameters('riskEmojis')['clean']} not suspicious &middot; @{parameters('riskEmojis')['unknown']} skipped, errored or inconclusive</em></p><p class=\"editor-paragraph\"><em>@{length(body('Analyzed_findings'))} of @{length(variables('findings'))} entities analyzed, @{sub(length(body('Reportable_findings')), length(body('Analyzed_findings')))} without a usable verdict, @{sub(length(variables('findings')), length(body('Reportable_findings')))} skipped. Entity Analyzer look-back @{parameters('lookBackDays')} days. Posted by playbook @{workflow()?['name']}.</em></p>"
+                },
+                "retryPolicy": {
+                  "type": "exponential",
+                  "count": 3,
+                  "interval": "PT10S"
+                }
+              },
+              "limit": {
+                "timeout": "PT2M"
+              }
+            },
+            "Check_anything_was_analyzed": {
+              "runAfter": {
+                "Summary_second_part": [
+                  "Succeeded"
+                ]
+              },
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "greater": [
+                      "@length(body('Analyzed_findings'))",
+                      0
+                    ]
+                  }
+                ]
+              },
+              "actions": {
+                "Add_summary_comment": {
+                  "runAfter": {},
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/Incidents/Comment",
+                    "body": {
+                      "incidentArmId": "@triggerBody()?['object']?['id']",
+                      "message": "<p class=\"editor-paragraph\">@{outputs('Worst_risk_emoji')} <strong>Sentinel Entity Analyzer &mdash; incident summary</strong></p>@{if(empty(outputs('Agent_summary_text')), concat('<p class=\"editor-paragraph\"><em>The agent returned no content. Raw Entity Analyzer output follows.</em></p>', join(body('Render_raw_blocks'), '')), replace(replace(outputs('Summary_first_part'), '```html', ''), '```', ''))}<p class=\"editor-paragraph\"><em>Risk key: @{parameters('riskEmojis')['high']} compromised or malicious &middot; @{parameters('riskEmojis')['medium']} suspicious &middot; @{parameters('riskEmojis')['low']} analyzed, nothing notable &middot; @{parameters('riskEmojis')['clean']} not suspicious &middot; @{parameters('riskEmojis')['unknown']} skipped, errored or inconclusive</em></p><p class=\"editor-paragraph\"><em>@{length(body('Analyzed_findings'))} of @{length(variables('findings'))} entities analyzed, @{sub(length(body('Reportable_findings')), length(body('Analyzed_findings')))} without a usable verdict, @{sub(length(variables('findings')), length(body('Reportable_findings')))} skipped. Entity Analyzer look-back @{parameters('lookBackDays')} days. Summary written by the workflow's autonomous agent action &mdash; AI-generated content may be incorrect, verify before acting. Posted by playbook @{workflow()?['name']}.</em></p>"
+                    },
+                    "retryPolicy": {
+                      "type": "exponential",
+                      "count": 3,
+                      "interval": "PT10S"
+                    }
+                  },
+                  "limit": {
+                    "timeout": "PT2M"
+                  }
+                },
+                "Check_summary_size": {
+                  "runAfter": {
+                    "Add_summary_comment": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "greater": [
+                          "@length(outputs('Agent_summary_text'))",
+                          28000
+                        ]
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Delay_before_second_comment": {
+                      "runAfter": {},
+                      "type": "Wait",
+                      "inputs": {
+                        "interval": {
+                          "count": 10,
+                          "unit": "Second"
+                        }
+                      }
+                    },
+                    "Add_summary_comment_part_2": {
+                      "runAfter": {
+                        "Delay_before_second_comment": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "ApiConnection",
+                      "inputs": {
+                        "host": {
+                          "connection": {
+                            "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                          }
+                        },
+                        "method": "post",
+                        "path": "/Incidents/Comment",
+                        "body": {
+                          "incidentArmId": "@triggerBody()?['object']?['id']",
+                          "message": "<p class=\"editor-paragraph\">@{outputs('Worst_risk_emoji')} <strong>Sentinel Entity Analyzer &mdash; incident summary (part 2)</strong></p>@{replace(replace(outputs('Summary_second_part'), '```html', ''), '```', '')}<p class=\"editor-paragraph\"><em>Continuation of a summary exceeding 28000 characters. Posted by playbook @{workflow()?['name']}.</em></p>"
+                        },
+                        "retryPolicy": {
+                          "type": "exponential",
+                          "count": 3,
+                          "interval": "PT10S"
+                        }
+                      },
+                      "limit": {
+                        "timeout": "PT2M"
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  }
+                }
+              },
+              "else": {
+                "actions": {
+                  "Check_anything_is_reportable": {
+                    "runAfter": {},
+                    "type": "If",
+                    "expression": {
+                      "and": [
+                        {
+                          "greater": [
+                            "@length(body('Reportable_findings'))",
+                            0
+                          ]
+                        }
+                      ]
+                    },
+                    "actions": {
+                      "Add_no_verdict_comment": {
+                        "runAfter": {},
+                        "type": "ApiConnection",
+                        "inputs": {
+                          "host": {
+                            "connection": {
+                              "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                            }
+                          },
+                          "method": "post",
+                          "path": "/Incidents/Comment",
+                          "body": {
+                            "incidentArmId": "@triggerBody()?['object']?['id']",
+                            "message": "<p class=\"editor-paragraph\">@{outputs('Worst_risk_emoji')} <strong>Sentinel Entity Analyzer</strong> &mdash; no usable verdict for any entity on this incident.</p><p class=\"editor-paragraph\">@{length(body('Reportable_findings'))} of @{length(variables('findings'))} entities reached the analyzer and none returned analysis text. First reason: @{coalesce(first(body('Reportable_findings'))?['note'], 'not reported')}</p><p class=\"editor-paragraph\"><em>No agent call was made. Posted by playbook @{workflow()?['name']}.</em></p>"
+                          },
+                          "retryPolicy": {
+                            "type": "exponential",
+                            "count": 3,
+                            "interval": "PT10S"
+                          }
+                        },
+                        "limit": {
+                          "timeout": "PT2M"
+                        }
+                      }
+                    },
+                    "else": {
+                      "actions": {
+                        "Nothing_to_report": {
+                          "runAfter": {},
+                          "type": "Compose",
+                          "inputs": "No analyzable entity on this incident (@{length(variables('findings'))} filtered entities, all skipped). No comment posted and no agent call made."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "outputs": {}
+        },
+        "parameters": {
+          "workspaceId": {
+            "value": "[parameters('workspaceId')]"
+          },
+          "lookBackDays": {
+            "value": "[parameters('lookBackDays')]"
+          },
+          "reportIpEntities": {
+            "value": "[parameters('reportIpEntities')]"
+          },
+          "maxAnalysisCharsPerEntity": {
+            "value": "[parameters('maxAnalysisCharsPerEntity')]"
+          },
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+                "connectionName": "[variables('sentinelConnectionName')]",
+                "id": "[concat(variables('managedApiBase'), 'azuresentinel')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              },
+              "sentinelmcp": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('mcpConnectionName'))]",
+                "connectionName": "[variables('mcpConnectionName')]",
+                "id": "[concat(variables('managedApiBase'), 'sentinelmcp')]",
+                "connectionProperties": {
+                  "authentication": {
+                    "type": "ManagedServiceIdentity"
+                  }
+                }
+              }
+            }
+          },
+          "riskEmojis": {
+            "value": "[parameters('riskEmojis')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "playbookResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('playbookName'))]"
+    },
+    "playbookPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('playbookName')), '2019-05-01', 'full').identity.principalId]"
+    }
+  }
+}

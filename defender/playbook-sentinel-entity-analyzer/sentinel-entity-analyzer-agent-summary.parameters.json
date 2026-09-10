@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "playbookName": {
+      "value": "sentinel-entity-analyzer-summary"
+    },
+    "location": {
+      "value": "swedencentral"
+    },
+    "workspaceId": {
+      "value": "REPLACE-WITH-WORKSPACE-CUSTOMERID-GUID"
+    },
+    "lookBackDays": {
+      "value": 7
+    },
+    "entityConcurrency": {
+      "value": 1
+    },
+    "workflowState": {
+      "value": "Disabled"
+    },
+    "sentinelTemplateVersion": {
+      "value": "1.0"
+    },
+    "reportIpEntities": {
+      "value": true
+    },
+    "maxAnalysisCharsPerEntity": {
+      "value": 4000
+    },
+    "riskEmojis": {
+      "value": {
+        "high": "🔴",
+        "medium": "🟠",
+        "low": "🟡",
+        "clean": "🟢",
+        "unknown": "⚪"
+      }
+    },
+    "agentIterationLimit": {
+      "value": 10
+    },
+    "agentModelType": {
+      "value": "AzureOpenAI"
+    },
+    "agentMaxHistoryTokens": {
+      "value": 128000
+    }
+  }
+}
