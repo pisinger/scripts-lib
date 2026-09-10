@@ -1,0 +1,126 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 920" role="img" aria-labelledby="title desc">
+  <title id="title">Microsoft Sentinel Entity Analyzer incident enrichment workflow</title>
+  <desc id="desc">High-level flow from a Sentinel incident through entity analysis and a no-tools Logic Apps Agent to one or two incident comments, with the required permissions shown for each action.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#101827"/>
+      <stop offset="1" stop-color="#17243a"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity=".28"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#91a8c5"/>
+    </marker>
+    <style>
+      .title{font:700 31px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#f4f7fb}
+      .subtitle{font:400 16px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#aebed2}
+      .heading{font:700 17px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#f4f7fb}
+      .body{font:400 14px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#d8e2ef}
+      .perm{font:600 13px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#ffd58a}
+      .small{font:400 13px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#aebed2}
+      .label{font:700 12px system-ui,-apple-system,"Segoe UI",sans-serif;fill:#91a8c5;letter-spacing:1.3px}
+      .card{stroke-width:1.5;filter:url(#shadow)}
+      .trigger{fill:#17385b;stroke:#4d9be8}
+      .data{fill:#202c43;stroke:#6e86a8}
+      .mcp{fill:#30265a;stroke:#a78bfa}
+      .agent{fill:#17483f;stroke:#57c7ad}
+      .comment{fill:#203e61;stroke:#65a9ff}
+      .note{fill:#202938;stroke:#526984}
+      .arrow{stroke:#91a8c5;stroke-width:2.4;fill:none;marker-end:url(#arrow)}
+      .dash{stroke:#91a8c5;stroke-width:2;stroke-dasharray:7 7;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+
+  <rect width="1400" height="920" fill="url(#bg)"/>
+  <text class="title" x="70" y="68">Sentinel Entity Analyzer → one incident summary</text>
+  <text class="subtitle" x="70" y="98">High-level Logic Apps flow · entity analysis is collected first, then summarized once</text>
+
+  <text class="label" x="70" y="160">DETERMINISTIC WORKFLOW</text>
+
+  <rect class="card trigger" x="70" y="190" width="220" height="150" rx="14"/>
+  <text class="heading" x="95" y="225">1  Sentinel incident</text>
+  <text class="body" x="95" y="253">Incident trigger</text>
+  <text class="body" x="95" y="276">Read related entities</text>
+  <text class="perm" x="95" y="315">MI · incident access</text>
+
+  <path class="arrow" d="M290 265 H345"/>
+
+  <rect class="card data" x="345" y="190" width="240" height="150" rx="14"/>
+  <text class="heading" x="370" y="225">2  Normalize entities</text>
+  <text class="body" x="370" y="253">Account → User</text>
+  <text class="body" x="370" y="276">URL / DNS → Url</text>
+  <text class="body" x="370" y="299">IP → skipped + reported</text>
+  <text class="perm" x="370" y="325">No extra data permission</text>
+
+  <path class="arrow" d="M585 265 H640"/>
+
+  <rect class="card mcp" x="640" y="190" width="270" height="150" rx="14"/>
+  <text class="heading" x="665" y="225">3  Entity Analyzer</text>
+  <text class="body" x="665" y="253">Start + retrieve result</text>
+  <text class="body" x="665" y="276">Verdict, evidence, sources</text>
+  <text class="perm" x="665" y="309">MI · Security Reader</text>
+  <text class="perm" x="665" y="329">Security Copilot Contributor</text>
+
+  <path class="arrow" d="M910 265 H965"/>
+
+  <rect class="card data" x="965" y="190" width="250" height="150" rx="14"/>
+  <text class="heading" x="990" y="225">4  Collect findings</text>
+  <text class="body" x="990" y="253">Append one object/entity</text>
+  <text class="body" x="990" y="276">Trim analysis payload</text>
+  <text class="body" x="990" y="299">Compute worst risk light</text>
+  <text class="perm" x="990" y="325">Workflow state only</text>
+
+  <path class="arrow" d="M1215 265 H1270"/>
+
+  <rect class="card agent" x="1270" y="190" width="80" height="150" rx="14"/>
+  <text class="heading" x="1310" y="225" text-anchor="middle">5</text>
+  <text class="body" x="1310" y="254" text-anchor="middle">Built-in</text>
+  <text class="body" x="1310" y="276" text-anchor="middle">Agent</text>
+  <text class="body" x="1310" y="298" text-anchor="middle">no tools</text>
+  <text class="perm" x="1310" y="325" text-anchor="middle">No Sentinel</text>
+
+  <path class="dash" d="M1310 340 V415 H235 V480"/>
+  <text class="small" x="770" y="405" text-anchor="middle">one findings payload → one HTML summary</text>
+
+  <text class="label" x="70" y="450">INCIDENT WRITEBACK</text>
+
+  <rect class="card comment" x="70" y="480" width="330" height="175" rx="14"/>
+  <text class="heading" x="98" y="518">6  Add summary comment</text>
+  <text class="body" x="98" y="547">Header + Agent summary</text>
+  <text class="body" x="98" y="570">Risk key + entity counts</text>
+  <text class="body" x="98" y="593">Normal path: one comment</text>
+  <text class="perm" x="98" y="628">MI · Sentinel Responder</text>
+
+  <path class="arrow" d="M400 565 H470"/>
+
+  <rect class="card note" x="470" y="480" width="310" height="175" rx="14"/>
+  <text class="heading" x="495" y="518">Size check</text>
+  <text class="body" x="495" y="547">Summary ≤ 28,000 chars?</text>
+  <text class="body" x="495" y="570">Yes → stop</text>
+  <text class="body" x="495" y="593">No → split response</text>
+  <text class="perm" x="495" y="628">No extra permission</text>
+
+  <path class="arrow" d="M780 565 H850"/>
+
+  <rect class="card note" x="850" y="480" width="250" height="175" rx="14"/>
+  <text class="heading" x="875" y="518">10-second delay</text>
+  <text class="body" x="875" y="547">Wait before continuation</text>
+  <text class="body" x="875" y="570">Keeps updates ordered</text>
+  <text class="perm" x="875" y="628">No extra permission</text>
+
+  <path class="arrow" d="M1100 565 H1170"/>
+
+  <rect class="card comment" x="1170" y="480" width="180" height="175" rx="14"/>
+  <text class="heading" x="1260" y="518" text-anchor="middle">Part 2</text>
+  <text class="body" x="1260" y="547" text-anchor="middle">Remainder</text>
+  <text class="body" x="1260" y="570" text-anchor="middle">incident comment</text>
+  <text class="perm" x="1260" y="628" text-anchor="middle">MI · Sentinel</text>
+  <text class="perm" x="1260" y="645" text-anchor="middle">Responder</text>
+
+  <rect class="card note" x="70" y="735" width="1280" height="105" rx="14"/>
+  <text class="heading" x="98" y="772">Required platform prerequisites</text>
+  <text class="body" x="98" y="800">Sentinel data lake onboarded · Sentinel SOAR Essentials installed · system-assigned managed identity configured</text>
+  <text class="small" x="98" y="823">The Agent only summarizes the supplied findings. It does not query Sentinel or authorize response actions.</text>
+  <text class="small" x="1305" y="875" text-anchor="end">Generated by AI · verify permissions and workflow behavior before deployment</text>
+</svg>
