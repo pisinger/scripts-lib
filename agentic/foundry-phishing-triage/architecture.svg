@@ -1,0 +1,243 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 900" width="1400" height="900" font-family="Segoe UI, system-ui, -apple-system, Helvetica, Arial, sans-serif">
+  <title>Defender phishing triage: Foundry agent + Azure Functions MCP architecture</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrowPerm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b45309"/>
+    </marker>
+    <style>
+      .title { font-size: 22px; font-weight: 700; fill: #0f172a; }
+      .subtitle { font-size: 13px; fill: #475569; }
+      .h { font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .h2 { font-size: 13px; font-weight: 700; fill: #0f172a; }
+      .t { font-size: 12px; fill: #1e293b; }
+      .s { font-size: 11px; fill: #475569; }
+      .mono { font-family: Consolas, "Cascadia Mono", Menlo, monospace; font-size: 11px; fill: #1e293b; }
+      .perm { font-family: Consolas, "Cascadia Mono", Menlo, monospace; font-size: 11px; fill: #92400e; }
+      .lbl { font-size: 11px; fill: #334155; }
+      .lblPerm { font-size: 11px; fill: #92400e; font-weight: 600; }
+      .flow { stroke: #334155; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .permflow { stroke: #b45309; stroke-width: 1.8; fill: none; stroke-dasharray: 6 4; marker-end: url(#arrowPerm); }
+    </style>
+  </defs>
+
+  <rect width="1400" height="900" fill="#ffffff"/>
+  <text x="30" y="40" class="title">Defender phishing triage — Foundry agent + Azure Functions MCP</text>
+  <text x="30" y="62" class="subtitle">Read-only investigation. Solid arrows = runtime calls · dashed amber = permissions / roles · all downstream calls use the Function's system-assigned managed identity</text>
+
+  <!-- ===== Actors (left) ===== -->
+  <rect x="30" y="125" width="200" height="80" rx="10" fill="#f1f5f9" stroke="#64748b"/>
+  <text x="130" y="149" text-anchor="middle" class="h2">SOC analyst</text>
+  <text x="130" y="167" text-anchor="middle" class="s">Foundry playground / app</text>
+  <text x="130" y="182" text-anchor="middle" class="s">.eml, Message-ID, NMID,</text>
+  <text x="130" y="197" text-anchor="middle" class="s">alert / incident ID, new reports</text>
+
+  <rect x="30" y="218" width="200" height="92" rx="10" fill="#faf5ff" stroke="#7c3aed"/>
+  <text x="130" y="240" text-anchor="middle" class="h2">Playbook (Logic App)</text>
+  <text x="130" y="257" text-anchor="middle" class="s">Sentinel / Defender trigger</text>
+  <text x="130" y="271" text-anchor="middle" class="s">runs agent (Responses API)</text>
+  <text x="130" y="285" text-anchor="middle" class="s">→ verdict as incident comment</text>
+  <text x="130" y="301" text-anchor="middle" class="lblPerm">optional · MI: Foundry User</text>
+
+  <rect x="30" y="380" width="200" height="110" rx="10" fill="#f1f5f9" stroke="#64748b"/>
+  <text x="130" y="408" text-anchor="middle" class="h2">Deployer / admin</text>
+  <text x="130" y="428" text-anchor="middle" class="mono">deploy.ps1</text>
+  <text x="130" y="444" text-anchor="middle" class="mono">permissions.ps1</text>
+  <text x="130" y="460" text-anchor="middle" class="mono">reporting-mailbox-access.ps1</text>
+  <text x="130" y="476" text-anchor="middle" class="mono">teardown.ps1</text>
+
+  <!-- ===== Azure resource group ===== -->
+  <rect x="270" y="90" width="640" height="780" rx="14" fill="#f8fafc" stroke="#0078d4" stroke-width="1.5" stroke-dasharray="8 5"/>
+  <text x="290" y="115" class="h" fill="#0078d4">Resource group rg-phishing-triage · Sweden Central</text>
+
+  <!-- Foundry -->
+  <rect x="290" y="135" width="600" height="215" rx="12" fill="#eef2ff" stroke="#6366f1"/>
+  <text x="310" y="160" class="h">Microsoft Foundry · fdyphish&lt;suffix&gt;</text>
+  <text x="310" y="178" class="s">project defender-agents · local auth disabled (Entra only)</text>
+
+  <rect x="310" y="192" width="270" height="140" rx="10" fill="#ffffff" stroke="#6366f1"/>
+  <text x="325" y="215" class="h2">Prompt agent "ps-phishing-triage"</text>
+  <text x="325" y="235" class="t">model deployment gpt-5.6-luna</text>
+  <text x="325" y="251" class="s">GlobalStandard · 500 units = 500K TPM</text>
+  <text x="325" y="271" class="t">instructions: agent-instructions.md</text>
+  <text x="325" y="291" class="t">tool: mcp "defender_phishing"</text>
+  <text x="325" y="307" class="s">require_approval: never (read-only tools)</text>
+  <text x="325" y="323" class="s">autonomous run · "Not retrieved" gaps</text>
+
+  <rect x="605" y="192" width="265" height="140" rx="10" fill="#ffffff" stroke="#6366f1"/>
+  <text x="620" y="215" class="h2">Project connection</text>
+  <text x="620" y="233" class="mono">phishing-triage-mcp</text>
+  <text x="620" y="253" class="t">category CustomKeys</text>
+  <text x="620" y="271" class="t">header x-functions-key</text>
+  <text x="620" y="291" class="s">key injected by Foundry at call time;</text>
+  <text x="620" y="307" class="s">never in the agent definition</text>
+  <text x="620" y="324" class="lblPerm">demo auth · prod: Entra ID (project MI)</text>
+
+  <path class="flow" d="M580,262 L603,262"/>
+
+  <!-- Function App -->
+  <rect x="290" y="390" width="600" height="250" rx="12" fill="#ecfdf5" stroke="#059669"/>
+  <text x="310" y="415" class="h">Function App func-phish-mcp-&lt;suffix&gt;</text>
+  <text x="310" y="433" class="s">Flex Consumption FC1 · Python 3.12 · Azure Functions MCP extension · one function per tool</text>
+  <text x="310" y="451" class="mono">https://…/runtime/webhooks/mcp  (auth: mcp_extension system key)</text>
+
+  <text x="310" y="476" class="h2">MCP tools (12 functions)</text>
+  <text x="870" y="476" text-anchor="end" class="s">Graph: retry 429/503 (Retry-After) · ≤2 parallel hunts</text>
+  <text x="310" y="495" class="mono">investigate_email</text>
+  <text x="310" y="511" class="mono">run_hunting_query</text>
+  <text x="310" y="527" class="mono">get_incident</text>
+  <text x="310" y="543" class="mono">search_analyzed_emails</text>
+  <text x="310" y="559" class="mono">get_analyzed_email</text>
+  <text x="310" y="575" class="mono">lookup_threat_intel</text>
+  <text x="510" y="495" class="mono">list_email_threat_submissions</text>
+  <text x="510" y="511" class="mono">get_email_threat_submission</text>
+  <text x="510" y="527" class="mono">analyze_submitted_email</text>
+  <text x="510" y="543" class="mono">list_reported_emails</text>
+  <text x="510" y="559" class="mono">get_reported_email</text>
+  <text x="510" y="575" class="mono">match_threat_indicators</text>
+
+  <rect x="310" y="585" width="270" height="40" rx="8" fill="#ffffff" stroke="#059669"/>
+  <text x="325" y="603" class="h2">User-assigned MI (host storage)</text>
+  <text x="325" y="618" class="s">no storage keys in app settings</text>
+
+  <rect x="605" y="585" width="265" height="40" rx="8" fill="#fef3c7" stroke="#b45309"/>
+  <text x="620" y="603" class="h2" fill="#92400e">System-assigned identity (MI)</text>
+  <text x="620" y="618" class="s">Graph + EXO · ID in deployment.env</text>
+
+  <path class="flow" d="M737,332 L737,388"/>
+  <text x="745" y="358" class="lbl">MCP · Streamable HTTP</text>
+  <text x="745" y="373" class="lbl">x-functions-key</text>
+
+  <!-- Supporting resources -->
+  <rect x="290" y="690" width="185" height="160" rx="12" fill="#ffffff" stroke="#64748b"/>
+  <text x="305" y="714" class="h2">Key Vault</text>
+  <text x="305" y="732" class="mono">kv-phish-…</text>
+  <text x="305" y="752" class="t">secret mcp-api-key</text>
+  <text x="305" y="770" class="s">operator copy of the MCP key</text>
+  <text x="305" y="786" class="s">(same value as connection</text>
+  <text x="305" y="802" class="s">and mcp_extension key)</text>
+  <text x="305" y="822" class="s">RBAC authorization,</text>
+  <text x="305" y="838" class="s">soft delete</text>
+
+  <rect x="490" y="690" width="210" height="160" rx="12" fill="#ffffff" stroke="#64748b"/>
+  <text x="505" y="714" class="h2">Storage account</text>
+  <text x="505" y="732" class="mono">stphish…</text>
+  <text x="505" y="752" class="t">host storage + app-package</text>
+  <text x="505" y="768" class="t">deployment container</text>
+  <text x="505" y="788" class="s">shared key access disabled</text>
+  <text x="505" y="806" class="perm">UAI: Blob Data Contributor,</text>
+  <text x="505" y="822" class="perm">Queue / Table Data</text>
+  <text x="505" y="838" class="perm">Contributor</text>
+
+  <rect x="715" y="690" width="175" height="160" rx="12" fill="#ffffff" stroke="#64748b"/>
+  <text x="730" y="714" class="h2">Application Insights</text>
+  <text x="730" y="732" class="mono">appi-phish-…</text>
+  <text x="730" y="752" class="t">requests per tool</text>
+  <text x="730" y="768" class="t">warnings: service +</text>
+  <text x="730" y="784" class="t">HTTP status, 400/403</text>
+  <text x="730" y="800" class="t">detail (server-side only)</text>
+
+  <path class="flow" d="M560,640 L560,688"/>
+  <path class="flow" d="M800,640 L800,688"/>
+  <text x="568" y="668" class="lbl">host storage (UAI)</text>
+  <text x="808" y="668" class="lbl">telemetry</text>
+
+  <!-- ===== Microsoft cloud APIs (right) ===== -->
+  <text x="960" y="115" class="h" fill="#0f172a">Microsoft cloud APIs (tenant)</text>
+
+  <rect x="960" y="135" width="410" height="150" rx="12" fill="#fff7ed" stroke="#ea580c"/>
+  <text x="975" y="160" class="h2">Microsoft Graph security · Defender XDR data (v1.0)</text>
+  <text x="975" y="177" class="mono">/security/runHuntingQuery · /security/incidents</text>
+  <text x="975" y="200" class="perm">ThreatHunting.Read.All</text>
+  <text x="1175" y="200" class="s">advanced hunting + TI match</text>
+  <text x="975" y="216" class="perm">SecurityIncident.Read.All</text>
+  <text x="1175" y="216" class="s">incidents + alerts</text>
+  <text x="975" y="238" class="t">EmailEvents, EmailUrlInfo, EmailAttachmentInfo,</text>
+  <text x="975" y="254" class="t">UrlClickEvents, AlertEvidence, ThreatIntelIndicators</text>
+  <text x="975" y="272" class="s">TI: all IoCs in one query (MDTI, Premium MDTI, TAXII)</text>
+
+  <rect x="960" y="305" width="410" height="170" rx="12" fill="#eff6ff" stroke="#2563eb"/>
+  <text x="975" y="330" class="h2">Microsoft Graph security (beta) · email &amp; TI</text>
+  <text x="975" y="347" class="mono">graph.microsoft.com · appId 00000003-…</text>
+  <text x="975" y="370" class="perm">ThreatIntelligence.Read.All</text>
+  <text x="1175" y="370" class="s">host reputation (fallback)</text>
+  <text x="975" y="388" class="perm">SecurityAnalyzedMessage.Read.All</text>
+  <text x="1210" y="388" class="s">analyzedEmails</text>
+  <text x="975" y="406" class="perm">ThreatSubmission.Read.All</text>
+  <text x="1175" y="406" class="s">emailThreats</text>
+  <text x="975" y="430" class="s">granted by permissions.ps1 (az rest, app-role</text>
+  <text x="975" y="446" class="s">assignments on the Function managed identity)</text>
+  <text x="975" y="464" class="s">No Graph Mail.Read — never tenant-wide mail access</text>
+
+  <rect x="960" y="495" width="410" height="185" rx="12" fill="#f0fdf4" stroke="#16a34a"/>
+  <text x="975" y="520" class="h2">Exchange Online · Defender reporting mailbox</text>
+  <text x="975" y="537" class="mono">REPORTING_MAILBOX_UPN (app setting)</text>
+  <text x="975" y="560" class="perm">Exchange RBAC for Applications:</text>
+  <text x="975" y="576" class="perm">Application Mail.Read</text>
+  <text x="975" y="592" class="perm">scoped to management scope</text>
+  <text x="975" y="608" class="perm">PhishingTriage-ReportingMailbox (1 mailbox)</text>
+  <text x="975" y="630" class="s">via Graph /users/{mailbox}/messages · reads report</text>
+  <text x="975" y="646" class="s">envelopes + attached original (item attachment)</text>
+  <text x="975" y="664" class="s">granted by reporting-mailbox-access.ps1 -Apply</text>
+
+  <rect x="960" y="715" width="410" height="75" rx="10" fill="#f1f5f9" stroke="#64748b"/>
+  <text x="975" y="740" class="h2">End user</text>
+  <text x="975" y="758" class="t">Outlook "Report" button → Phishing / Junk</text>
+  <text x="975" y="776" class="s">Defender user-reported settings route reports to the mailbox</text>
+  <path class="flow" d="M1165,715 L1165,682"/>
+
+  <!-- Production note -->
+  <rect x="960" y="805" width="410" height="80" rx="10" fill="#fef2f2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="975" y="827" class="h2" fill="#b91c1c">⚠ Production: Entra ID instead of the shared key</text>
+  <text x="975" y="845" class="s">Function built-in auth: Entra app, App ID URI = audience</text>
+  <text x="975" y="860" class="s">Key access off: webhookAuthorizationLevel = Anonymous</text>
+  <text x="975" y="875" class="s">Allow only the Foundry project MI · connection auth: project MI</text>
+
+  <!-- ===== Flows ===== -->
+  <!-- analyst -> agent -->
+  <path class="flow" d="M230,165 C265,165 280,240 308,240"/>
+  <text x="246" y="152" class="lbl">chat</text>
+  <path class="flow" d="M230,264 C262,264 280,285 308,285" stroke="#7c3aed"/>
+  <text x="246" y="257" class="lbl" fill="#6d28d9">API</text>
+
+  <!-- MI -> APIs -->
+  <path class="flow" d="M870,596 L926,596 L926,210 L958,210"/>
+  <path class="flow" d="M870,605 L938,605 L938,390 L958,390"/>
+  <path class="flow" d="M870,614 L948,614 L948,575 L958,575"/>
+  <text x="921" y="470" class="lbl" text-anchor="middle" transform="rotate(-90 921 470)">MI tokens · HTTPS</text>
+
+  <!-- Permissions (dashed) -->
+  <path class="permflow" d="M200,380 C200,300 260,300 303,300"/>
+  <text x="40" y="340" class="lblPerm">Foundry User role on</text>
+  <text x="40" y="354" class="lblPerm">project (create agents)</text>
+
+  <path class="permflow" d="M230,480 C258,480 250,705 288,705"/>
+  <text x="40" y="520" class="lblPerm">deploy.ps1 writes one MCP</text>
+  <text x="40" y="534" class="lblPerm">key to Key Vault, the project</text>
+  <text x="40" y="548" class="lblPerm">connection and the Function</text>
+  <text x="40" y="562" class="lblPerm">mcp_extension system key</text>
+
+  <!-- Defender protection -->
+  <rect x="30" y="578" width="200" height="172" rx="10" fill="#f0f9ff" stroke="#0369a1"/>
+  <text x="45" y="598" class="h2" fill="#075985">Defender protection</text>
+  <text x="45" y="617" class="s">1. Agentic cloud use case</text>
+  <text x="45" y="633" class="s">Agent 365 license: agent detection,</text>
+  <text x="45" y="649" class="s">alerts, posture, tool-call protection</text>
+  <text x="45" y="671" class="s">2. Model deployment + app calls</text>
+  <text x="45" y="687" class="s">Defender for Cloud AI plan</text>
+  <text x="45" y="703" class="s">(Defender for AI Services): alerts</text>
+  <text x="45" y="719" class="s">for data + control plane</text>
+
+  <!-- Legend -->
+  <rect x="30" y="760" width="200" height="110" rx="10" fill="#ffffff" stroke="#cbd5e1"/>
+  <text x="45" y="778" class="h2">Legend</text>
+  <path class="flow" d="M45,797 L95,797"/>
+  <text x="105" y="801" class="s">runtime call</text>
+  <path class="permflow" d="M45,819 L95,819"/>
+  <text x="105" y="823" class="s">permission / role</text>
+  <text x="45" y="843" class="perm">Amber mono</text>
+  <text x="125" y="843" class="s">= granted role</text>
+  <text x="45" y="861" class="s">Tools are read-only.</text>
+</svg>

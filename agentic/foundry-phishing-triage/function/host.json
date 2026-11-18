@@ -1,0 +1,15 @@
+{
+  "version": "2.0",
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.0.0, 5.0.0)"
+  },
+  "extensions": {
+    "mcp": {
+      "serverName": "defender-phishing-triage",
+      "serverVersion": "0.2.0",
+      "instructions": "Read-only Microsoft Defender XDR and Graph tools for phishing email triage."
+    }
+  },
+  "logging": { "applicationInsights": { "samplingSettings": { "isEnabled": true, "excludedTypes": "Request" } } }
+}

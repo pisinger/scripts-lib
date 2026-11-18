@@ -1,0 +1,16 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": { "value": "swedencentral" },
+    "foundryName": { "value": "<globally-unique-foundry-name>" },
+    "functionAppName": { "value": "<globally-unique-function-name>" },
+    "projectName": { "value": "defender-agents" },
+    "modelDeploymentName": { "value": "gpt-5.6-luna" },
+    "modelName": { "value": "gpt-5.6-luna" },
+    "modelVersion": { "value": "2026-07-09" },
+    "modelCapacity": { "value": 500 },
+    "mcpApiKey": { "value": "<inject-securely-at-deploy-time>" },
+    "reportingMailboxUpn": { "value": "<dedicated-reporting-mailbox-upn-or-empty-string>" }
+  }
+}
