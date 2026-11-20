@@ -1,0 +1,423 @@
+{
+  "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "projectEndpoint": {
+      "type": "String"
+    },
+    "agentName": {
+      "type": "String"
+    }
+  },
+  "triggers": {
+    "manual": {
+      "type": "Request",
+      "kind": "Http",
+      "inputs": {
+        "method": "POST",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "incidentId": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
+  "actions": {
+    "Incident_id": {
+      "type": "Compose",
+      "runAfter": {},
+      "inputs": "@string(coalesce(triggerOutputs()?['headers']?['incidentId'], triggerOutputs()?['queries']?['incidentId'], triggerBody()?['incidentId'], ''))"
+    },
+    "Validate_incident_id": {
+      "type": "If",
+      "runAfter": {
+        "Incident_id": [
+          "Succeeded"
+        ]
+      },
+      "expression": {
+        "and": [
+          {
+            "equals": [
+              "@isInt(outputs('Incident_id'))",
+              true
+            ]
+          },
+          {
+            "equals": [
+              "@startsWith(outputs('Incident_id'), '-')",
+              false
+            ]
+          },
+          {
+            "equals": [
+              "@startsWith(outputs('Incident_id'), '+')",
+              false
+            ]
+          },
+          {
+            "equals": [
+              "@equals(outputs('Incident_id'), trim(outputs('Incident_id')))",
+              true
+            ]
+          },
+          {
+            "lessOrEquals": [
+              "@length(outputs('Incident_id'))",
+              12
+            ]
+          }
+        ]
+      },
+      "actions": {},
+      "else": {
+        "actions": {
+          "Terminate_invalid_id": {
+            "type": "Terminate",
+            "runAfter": {},
+            "inputs": {
+              "runStatus": "Failed",
+              "runError": {
+                "code": "InvalidIncidentId",
+                "message": "incidentId must be a numeric Defender XDR incident ID."
+              }
+            }
+          }
+        }
+      }
+    },
+    "Start_agent_run": {
+      "type": "Http",
+      "runAfter": {
+        "Validate_incident_id": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "method": "POST",
+        "uri": "@{parameters('projectEndpoint')}/openai/v1/responses",
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "agent_reference": {
+            "type": "agent_reference",
+            "name": "@{parameters('agentName')}"
+          },
+          "input": "Investigate Defender XDR incident ID @{string(int(outputs('Incident_id')))}. Run the complete workflow and end with the JSON block.",
+          "background": true
+        },
+        "authentication": {
+          "type": "ManagedServiceIdentity",
+          "audience": "https://ai.azure.com"
+        }
+      }
+    },
+    "Wait_for_agent": {
+      "type": "Until",
+      "runAfter": {
+        "Start_agent_run": [
+          "Succeeded"
+        ]
+      },
+      "expression": "@not(contains(createArray('queued', 'in_progress'), body('Get_agent_run')?['status']))",
+      "limit": {
+        "count": 80,
+        "timeout": "PT20M"
+      },
+      "actions": {
+        "Delay": {
+          "type": "Wait",
+          "runAfter": {},
+          "inputs": {
+            "interval": {
+              "count": 15,
+              "unit": "Second"
+            }
+          }
+        },
+        "Get_agent_run": {
+          "type": "Http",
+          "runAfter": {
+            "Delay": [
+              "Succeeded"
+            ]
+          },
+          "inputs": {
+            "method": "GET",
+            "uri": "@{parameters('projectEndpoint')}/openai/v1/responses/@{body('Start_agent_run')?['id']}",
+            "authentication": {
+              "type": "ManagedServiceIdentity",
+              "audience": "https://ai.azure.com"
+            }
+          }
+        }
+      }
+    },
+    "Check_completed": {
+      "type": "If",
+      "runAfter": {
+        "Wait_for_agent": [
+          "Succeeded"
+        ]
+      },
+      "expression": {
+        "and": [
+          {
+            "equals": [
+              "@body('Get_agent_run')?['status']",
+              "completed"
+            ]
+          }
+        ]
+      },
+      "actions": {},
+      "else": {
+        "actions": {
+          "Terminate_agent_failed": {
+            "type": "Terminate",
+            "runAfter": {},
+            "inputs": {
+              "runStatus": "Failed",
+              "runError": {
+                "code": "AgentRun_@{body('Get_agent_run')?['status']}",
+                "message": "Agent run did not complete: @{string(coalesce(body('Get_agent_run')?['error'], body('Get_agent_run')?['incomplete_details'], 'no details'))}"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Filter_messages": {
+      "type": "Query",
+      "runAfter": {
+        "Check_completed": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "from": "@body('Get_agent_run')?['output']",
+        "where": "@equals(item()?['type'], 'message')"
+      }
+    },
+    "Select_text": {
+      "type": "Select",
+      "runAfter": {
+        "Filter_messages": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "from": "@last(body('Filter_messages'))?['content']",
+        "select": "@item()?['text']"
+      }
+    },
+    "Report": {
+      "type": "Compose",
+      "runAfter": {
+        "Select_text": [
+          "Succeeded"
+        ]
+      },
+      "inputs": "@join(body('Select_text'), '')"
+    },
+    "Check_json_block": {
+      "type": "If",
+      "runAfter": {
+        "Report": [
+          "Succeeded"
+        ]
+      },
+      "expression": {
+        "and": [
+          {
+            "contains": [
+              "@outputs('Report')",
+              "```json"
+            ]
+          }
+        ]
+      },
+      "actions": {},
+      "else": {
+        "actions": {
+          "Terminate_no_json": {
+            "type": "Terminate",
+            "runAfter": {},
+            "inputs": {
+              "runStatus": "Failed",
+              "runError": {
+                "code": "NoJsonBlock",
+                "message": "Agent response has no ```json block."
+              }
+            }
+          }
+        }
+      }
+    },
+    "Extract_json": {
+      "type": "Compose",
+      "runAfter": {
+        "Check_json_block": [
+          "Succeeded"
+        ]
+      },
+      "inputs": "@json(trim(first(split(last(split(outputs('Report'), '```json')), '```'))))"
+    },
+    "Parse_proposal": {
+      "type": "ParseJson",
+      "runAfter": {
+        "Extract_json": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "content": "@outputs('Extract_json')",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_version",
+            "incident_id",
+            "verdict",
+            "confidence",
+            "status",
+            "classification",
+            "determination",
+            "severity",
+            "scope_complete",
+            "uncovered_alert_ids",
+            "tags",
+            "comment"
+          ],
+          "properties": {
+            "schema_version": {
+              "type": "string",
+              "enum": [
+                "1.1"
+              ]
+            },
+            "incident_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "verdict": {
+              "type": "string",
+              "enum": [
+                "malicious",
+                "suspicious",
+                "benign",
+                "inconclusive"
+              ]
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "resolved",
+                "inProgress",
+                "active"
+              ]
+            },
+            "classification": {
+              "type": "string",
+              "enum": [
+                "truePositive",
+                "falsePositive",
+                "informationalExpectedActivity",
+                "unknown"
+              ]
+            },
+            "determination": {
+              "type": "string",
+              "enum": [
+                "phishing",
+                "malware",
+                "compromisedAccount",
+                "notMalicious",
+                "notEnoughDataToValidate",
+                "other",
+                "unknown"
+              ]
+            },
+            "severity": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "high",
+                "medium",
+                "low",
+                "informational",
+                null
+              ]
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "comment": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "scope_complete": {
+              "type": "boolean"
+            },
+            "uncovered_alert_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "Gate": {
+      "type": "Compose",
+      "runAfter": {
+        "Parse_proposal": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "incidentIdMatches": "@equals(body('Parse_proposal')?['incident_id'], outputs('Incident_id'))",
+        "closeAllowed": "@and(equals(body('Parse_proposal')?['status'], 'resolved'), equals(body('Parse_proposal')?['scope_complete'], true), empty(body('Parse_proposal')?['uncovered_alert_ids']), equals(body('Parse_proposal')?['confidence'], 'high'), equals(body('Parse_proposal')?['incident_id'], outputs('Incident_id')))",
+        "effectiveStatus": "@if(and(equals(body('Parse_proposal')?['status'], 'resolved'), equals(body('Parse_proposal')?['scope_complete'], true), empty(body('Parse_proposal')?['uncovered_alert_ids']), equals(body('Parse_proposal')?['confidence'], 'high'), equals(body('Parse_proposal')?['incident_id'], outputs('Incident_id'))), 'resolved', if(equals(body('Parse_proposal')?['status'], 'resolved'), 'inProgress', body('Parse_proposal')?['status']))",
+        "requiresApproval": "@and(and(equals(body('Parse_proposal')?['status'], 'resolved'), equals(body('Parse_proposal')?['scope_complete'], true), empty(body('Parse_proposal')?['uncovered_alert_ids']), equals(body('Parse_proposal')?['confidence'], 'high'), equals(body('Parse_proposal')?['incident_id'], outputs('Incident_id'))), equals(body('Parse_proposal')?['verdict'], 'benign'))"
+      }
+    },
+    "Result": {
+      "type": "Compose",
+      "runAfter": {
+        "Gate": [
+          "Succeeded"
+        ]
+      },
+      "inputs": {
+        "incidentId": "@outputs('Incident_id')",
+        "gate": "@outputs('Gate')",
+        "agentResponseId": "@body('Start_agent_run')?['id']",
+        "proposal": "@body('Parse_proposal')",
+        "report": "@outputs('Report')"
+      }
+    }
+  },
+  "outputs": {}
+}

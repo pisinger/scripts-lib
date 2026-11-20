@@ -9,7 +9,8 @@ All scripts use the current `az login` session, and `reporting-mailbox-access.ps
 | Script | Azure RBAC | Entra ID role | Exchange Online |
 |---|---|---|---|
 | `deploy.ps1` | **Owner** on the resource group (or Contributor + Role Based Access Control Administrator); subscription-level rights only to create the resource group and register providers | none (default user rights) | none |
-| `deploy.ps1 -AgentOnly` | **Foundry User** on the project (assigned by the first full deploy) | none | none |
+| `deploy.ps1 -AgentOnly` | **Foundry User** on the project (assigned by the first full deploy); **Reader** on the Logic App if `LOGIC_APP_NAME` is set. If the agent or project name changed, it also runs `deploy-logicapp.ps1` and needs its rights | none | none |
+| `deploy-logicapp.ps1` | **Logic App Contributor** (or Contributor) on the resource group + **Role Based Access Control Administrator** on the project (or the resource group) | none | none |
 | `permissions.ps1` | none | **Privileged Role Administrator** | none |
 | `reporting-mailbox-access.ps1` | none | **Exchange Administrator** (or Organization Management in Exchange) | Organization Management |
 | `teardown.ps1` | **Owner** on the resource group + purge rights at subscription scope | **Agent ID Administrator** + **Cloud Application Administrator** for the Entra agent cleanup | Organization Management for `-IncludeExchange` |
@@ -34,7 +35,16 @@ Use PIM to activate these roles for the run only; none of them is needed afterwa
 - **Resource providers:** `Microsoft.Web`, `Microsoft.CognitiveServices`, `Microsoft.KeyVault`, `Microsoft.Storage`, `Microsoft.Insights`, `Microsoft.OperationalInsights` and `Microsoft.ManagedIdentity` must be registered. Registering them needs Contributor on the subscription. They are usually registered already.
 - **Model quota:** the `gpt-5.6-luna` deployment (500K TPM, GlobalStandard) needs quota in the region. Quota is not a role. Check it in the Foundry portal under *Quota*.
 
-**Least privilege:** use Contributor plus **Role Based Access Control Administrator** on the resource group, with a condition that limits the assignable roles to the five roles above. That replaces Owner.
+**Least privilege:** use Contributor plus **Role Based Access Control Administrator** on the resource group, with a condition that limits the assignable roles to the five roles above (Foundry User also covers the Logic App identity). That replaces Owner.
+
+## `deploy-logicapp.ps1`
+
+| What the script does | Needed permission |
+|---|---|
+| Bicep: Consumption Logic App with a system-assigned identity | `Microsoft.Logic/workflows/write`: Logic App Contributor or Contributor on the resource group |
+| Bicep: assigns **Foundry User** (`53ca6127-…`) on the project to the Logic App identity, so it can invoke the agent | `Microsoft.Authorization/roleAssignments/write` on the project: Owner, User Access Administrator or Role Based Access Control Administrator on the project or resource group |
+
+The Logic App identity gets only Foundry User. It has no Graph or Defender rights; the agent's MCP tools use the Function identity. Applying incident updates later would need Graph `SecurityIncident.ReadWrite.All` on the Logic App identity, granted with `permissions.ps1`-style app-role assignment (Privileged Role Administrator).
 
 ## `permissions.ps1`
 
@@ -59,7 +69,7 @@ Doc: [RBAC for Applications in Exchange Online](https://learn.microsoft.com/exch
 
 | Step | Needed permission |
 |---|---|
-| Delete the resource group | Owner or Contributor on the resource group |
+| Delete the resource group (includes the Logic App and its role assignment) | Owner or Contributor on the resource group |
 | Purge the soft-deleted Key Vault (`az keyvault purge`) | `Microsoft.KeyVault/locations/deletedVaults/purge/action`. The deleted vault lives at subscription scope, so a resource-group role is not enough: use Key Vault Contributor or Contributor on the subscription. |
 | Purge the soft-deleted Foundry account (`az cognitiveservices account purge`) | `Microsoft.CognitiveServices/locations/resourceGroups/deletedAccounts/delete` at subscription scope (Contributor or Cognitive Services Contributor on the subscription) |
 | Delete the Entra Agent ID objects (agent identity, blueprint principal, blueprint application) | **Agent ID Administrator** for agent identities and blueprint principals; **Cloud Application Administrator** (or Application Administrator) for the blueprint application. Foundry creates these objects, so the operator is not their owner. |

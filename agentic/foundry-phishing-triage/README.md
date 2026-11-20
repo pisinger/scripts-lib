@@ -38,12 +38,14 @@ Tool errors are returned as `{"error": ...}` and include only the service name a
 1. Parse the submitted `.eml` first (TI checks run automatically).
 2. Pivot into Defender: an alert or incident ID you provide wins; otherwise use the embedded NetworkMessageId, then the RFC Message-ID.
 3. Run hunting pivots only as each condition calls for them.
+4. For an incident, classify every alert as email-related (covered) or not. With several messages, the worst message verdict wins.
+5. Return the report, ending with one fenced `json` block: an incident-update proposal (status, classification, determination, severity, tags, comment, `scope_complete`, `uncovered_alert_ids`). It never proposes `resolved` for an incomplete scope. The agent changes nothing itself.
 
 Without a usable identifier, the agent reports that it could not correlate with Defender and still analyzes the content. The workflow adapts email, IoC and incident patterns (evidence-only reporting, verdict gates) from [SCStelz/security-investigator](https://github.com/SCStelz/security-investigator). It is a new instruction file written for this scope, not a copy.
 
 ## Prerequisites and behavior
 
-**Model.** `gpt-5.6-luna` must be available in Sweden Central for your subscription. The SKU defaults to `GlobalStandard` (set in `main.bicep`). If the model is unavailable, deployment fails rather than quietly picking another model.
+**Model.** `gpt-5.6-luna` must be available in Sweden Central for your subscription. The SKU defaults to `GlobalStandard` (set in `main.bicep`). If the model is unavailable, deployment fails rather than quietly picking another model. Capacity is 500 = 500K TPM. Each model call in a run resends the whole context, so large incidents can hit `rate_limit_exceeded` (token rate limit). Raise `modelCapacity` or keep tool outputs small.
 
 **Defender data via Graph only.** Hunting uses `POST /security/runHuntingQuery` and incidents use `GET /security/incidents/{id}?$expand=alerts` (v1.0). The legacy `api.security.microsoft.com` is not used. The email tables require Defender for Office licensing and telemetry. Graph app roles for the managed identity, assigned by `permissions.ps1`: `ThreatHunting.Read.All`, `SecurityIncident.Read.All`, `ThreatIntelligence.Read.All`, `SecurityAnalyzedMessage.Read.All`, `ThreatSubmission.Read.All`.
 
@@ -64,7 +66,7 @@ Without a usable identifier, the agent reports that it could not correlate with 
 - **Fallback cache:** each worker caches results for 1 hour (`TI_CACHE_TTL_SECONDS`; `0` turns caching off). Concurrent lookups of the same host share one request. Only answers are cached, never errors or 429s. The cache is per instance and is lost on restart.
 
 **Hunting pivots.** Adapted from [`email_threat_detection.md`](https://github.com/SCStelz/security-investigator/blob/main/queries/email/email_threat_detection.md), [`aitm_threat_detection.md`](https://github.com/SCStelz/security-investigator/blob/main/queries/identity/aitm_threat_detection.md) and [`cloudappevents_exploration.md`](https://github.com/SCStelz/security-investigator/blob/main/queries/cloud/cloudappevents_exploration.md):
-- Sender and campaign spread, including other messages sharing the same URL
+- Sender and campaign spread, including other messages sharing the same URL. The campaign query is aggregated (top 25 sender/subject/delivery groups, not raw rows) and skipped for well-known first-party and tenant-internal senders
 - Delivery and ZAP state
 - Clicks on the investigated message
 - Click followed by a risky sign-in (`EntraIdSignInEvents`)
@@ -103,7 +105,7 @@ Refs: [Agent security moves to Agent 365](https://learn.microsoft.com/defender-x
 
 ## Deploy
 
-**Requires:** Azure CLI, Bicep CLI, Azure Functions Core Tools v4, Python 3.12, Foundry model access, and a tenant admin for the app-role grants. [`permissions.md`](permissions.md) lists the operator roles each script needs.
+**Requires:** Azure CLI, Bicep CLI, Azure Functions Core Tools v4, Python 3.12, Foundry model access, and a tenant admin for the app-role grants. [`PERMISSIONS.md`](PERMISSIONS.md) lists the operator roles each script needs.
 
 ### 1. Infrastructure, code and agent
 
@@ -144,7 +146,8 @@ The text in brackets shows where each value came from (`environment`, `deploymen
 | Bicep | Incremental update |
 | MCP key | Reused from Key Vault. Rotated only with `-RotateKey`, with `MCP_API_KEY`, or if the vault can't be read |
 | Function code | Redeployed only when the SHA-256 of `function/` changes (`FUNCTION_CODE_SHA256`) or with `-ForceCode` |
-| Agent | New version only if the instructions or tool definition changed |
+| Agent | New version only if the instructions or tool definition changed. `AGENT_NAME` and `AGENT_VERSION` are written to `deployment.env`, also with `-AgentOnly` |
+| Logic App | If `LOGIC_APP_NAME` is set and the agent or project name changed, `deploy-logicapp.ps1` runs automatically. New agent versions need no redeploy |
 | Roles and grants | Existing assignments are skipped |
 
 **What the script does:**
@@ -176,11 +179,30 @@ First configure [user-reported message settings](https://learn.microsoft.com/def
 - Afterwards, set `REPORTING_MAILBOX_UPN` and redeploy.
 - If only a Defender ID is known, the agent looks up `InternetMessageId` via `EmailEvents` and then calls `get_reported_email`. It never widens the mailbox search.
 
+### 4. Logic App (optional)
+
+A Consumption Logic App that runs the agent for one incident and parses its JSON proposal. It is read-only: it does not update the incident.
+
+```powershell
+./deploy-logicapp.ps1                    # names from deployment.env
+./deploy-logicapp.ps1 -AgentName <name>  # point it at another agent
+```
+
+- Name: `ps-logic-phish-triage-<suffix>`. Its managed identity gets `Foundry User` on the project.
+- **Run:** Portal > Logic App > **Run with payload**, method `POST`, header `incidentId` = `12345`. A query parameter `incidentId` or the body `{"incidentId": "12345"}` also work. Only numeric IDs are accepted.
+- **Flow:** calls the Responses API with `agent_reference` and `background: true`, polls every 15 s (max 20 min), extracts the last ```` ```json ```` block and validates it against the schema.
+- **Output:** the `Result` action holds `proposal`, `report` and `gate`:
+  - `closeAllowed` is true only for status `resolved` with `scope_complete`, no uncovered alerts, `high` confidence and a matching `incident_id`.
+  - `effectiveStatus` downgrades `resolved` to `inProgress` otherwise.
+  - `requiresApproval` flags a `benign` close for human approval.
+
 ## Files
 
 | File | Purpose |
 |---|---|
 | `deploy.ps1` | Deploys the infrastructure, Function code and agent |
+| `deploy-logicapp.ps1` | Deploys the triage Logic App |
+| `logicapp/` | Logic App Bicep (`logicapp.bicep`) and workflow definition (`workflow.json`) |
 | `permissions.ps1` | Assigns the Graph app roles to the Function identity |
 | `reporting-mailbox-access.ps1` | Previews or applies Exchange RBAC scoped to the reporting mailbox |
 | `teardown.ps1` | Deletes the resource group, purges Key Vault and Foundry, and deletes Entra Agent ID objects (prefix `<foundry-name>-`). Flags: `-IncludeExchange`, `-EntraOnly -FoundryName <name>`, `-PurgeEntra` (permanent, not restorable for 30 days), `-Force` |
@@ -188,7 +210,7 @@ First configure [user-reported message settings](https://learn.microsoft.com/def
 | `parameters.example.json` | Shape of the non-secret parameters |
 | `function/` | Python MCP server |
 | `agent-instructions.md` | Agent workflow, hunting pivots, report format |
-| `permissions.md` | Operator roles needed for each script |
+| `PERMISSIONS.md` | Operator roles needed for each script |
 | `architecture.svg` | Diagram |
 | `deployment.env` | Written by `deploy.ps1`; contains no secrets and is git-ignored. Re-runs and teardown read it. Archived as `deployment.env.removed-<timestamp>` after teardown |
 
@@ -201,6 +223,7 @@ First configure [user-reported message settings](https://learn.microsoft.com/def
 | Function | `FUNCTION_APP_NAME`, `FUNCTION_PLAN_NAME`, `MCP_ENDPOINT`, `FUNCTION_PRINCIPAL_ID`, `FUNCTION_APP_ID`, `FUNCTION_CODE_SHA256` |
 | Supporting | `KEY_VAULT_NAME`, `STORAGE_ACCOUNT_NAME`, `STORAGE_IDENTITY_NAME`, `APP_INSIGHTS_NAME` |
 | Mailbox | `REPORTING_MAILBOX_UPN`, `EXCHANGE_SCOPE_NAME`, `EXCHANGE_ROLE_ASSIGNMENT_NAME` |
+| Logic App | `LOGIC_APP_NAME` (written by `deploy-logicapp.ps1`, kept by `deploy.ps1`) |
 
 ## Limitations
 
@@ -210,4 +233,4 @@ This is starter IaC that has not been deployed in your subscription. Validate th
 - Defender schema
 - Foundry MCP connection behavior
 
-The alert-to-email pivot relies on `AlertEvidence.AdditionalFields.NetworkMessageId`; if your tenant's evidence uses a different shape, adjust that mapping. There is no private networking, and there are no write or remediation tools.
+The alert-to-email pivot relies on `AlertEvidence.AdditionalFields.NetworkMessageId`; if your tenant's evidence uses a different shape, adjust that mapping. There is no private networking, and there are no write or remediation tools. The Logic App only proposes incident updates; applying them (Graph `PATCH /security/incidents/{id}`, needs `SecurityIncident.ReadWrite.All`) is not included.

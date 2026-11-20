@@ -292,6 +292,8 @@ $envLines = [ordered]@{
     EXCHANGE_SCOPE_NAME           = 'PhishingTriage-ReportingMailbox'
     EXCHANGE_ROLE_ASSIGNMENT_NAME = 'PhishingTriage-ReportingMailbox-MailRead'
 }
+# Written by deploy-logicapp.ps1; keep it across full re-deploys.
+if ($fromFile['LOGIC_APP_NAME']) { $envLines['LOGIC_APP_NAME'] = $fromFile['LOGIC_APP_NAME'] }
 $content = @('# Written by deploy.ps1 - resource names of this deployment (no secrets). Used by teardown.ps1 and re-runs.')
 $content += $envLines.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" }
 Set-Content -LiteralPath $envFile -Value $content -Encoding utf8
@@ -337,8 +339,28 @@ while ($true) {
 
 Write-Host "Agent '$($agent.name)' version $($agent.version) created in $projectEndpoint" -ForegroundColor Green
 if (Test-Path -LiteralPath $envFile) {
-    $lines = @(Get-Content -LiteralPath $envFile | Where-Object { $_ -notmatch '^AGENT_VERSION=' }) + "AGENT_VERSION=$($agent.version)"
+    # AGENT_NAME too, so -AgentOnly -AgentName X is picked up by deploy-logicapp.ps1.
+    $lines = @(Get-Content -LiteralPath $envFile | Where-Object { $_ -notmatch '^AGENT_(NAME|VERSION)=' }) + "AGENT_NAME=$agentName" + "AGENT_VERSION=$($agent.version)"
     Set-Content -LiteralPath $envFile -Value $lines -Encoding utf8
+}
+
+# Keep the triage Logic App (if deployed) pointed at this agent. It always calls the agent's current
+# version, so only a different agent or project name needs a Logic App redeploy.
+$logicAppName = $fromFile['LOGIC_APP_NAME']
+if ($logicAppName) {
+    $laParams = az resource show --resource-group $resourceGroup --name $logicAppName --resource-type Microsoft.Logic/workflows --query properties.parameters --output json --only-show-errors 2>$null | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or -not $laParams) {
+        Write-Warning "Logic App '$logicAppName' from deployment.env not found - run ./deploy-logicapp.ps1 to deploy it."
+    } else {
+        $laAgent = $laParams.agentName.value
+        $laEndpoint = $laParams.projectEndpoint.value
+        if ($laAgent -ne $agentName -or $laEndpoint -ne $projectEndpoint) {
+            Write-Host "Logic App '$logicAppName' calls '$laAgent' ($laEndpoint) - updating it to '$agentName'." -ForegroundColor Yellow
+            & (Join-Path $PSScriptRoot 'deploy-logicapp.ps1') -Yes -AgentName $agentName -ProjectName $projectName
+        } else {
+            Write-Host "Logic App '$logicAppName' already calls '$agentName' (current version) - no update needed." -ForegroundColor DarkGray
+        }
+    }
 }
 Write-Host "MCP endpoint: $mcpEndpoint"
 if (-not $AgentOnly) {
